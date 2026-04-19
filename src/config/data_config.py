@@ -1,0 +1,4 @@
+YEARS = list(range(2014, 2025))
+CLEAN_THRESHOLD = 0.1
+SURFACES = ['Hard', 'Clay', 'Grass']
+IMPORTANCE_COLUMNS = ['elo_diff', 'elo_hard_diff', 'rank_diff', 'rank_point_diff', 'elo_clay_diff', 'elo_grass_diff', 'surface', 'age_diff', 'height_diff', 'tourney_level']
