@@ -30,13 +30,17 @@ def create_target(df: pd.DataFrame, random_state: int = 42) -> pd.DataFrame:
             data[new_col] = (data[w_col] - data[l_col]) * sign
 
     # =========================
-    # 2. ELO + form diffs — đã là winner - loser, chỉ cần đảo dấu
+    # 2. ELO + GLICKO2 + form diffs — đã là winner - loser, chỉ cần đảo dấu
     # =========================
     elo_form_cols = [
         'elo_diff',
         'elo_hard_diff',
         'elo_clay_diff',
         'elo_grass_diff',
+        'glicko2_diff',
+        'glicko2_hard_diff',
+        'glicko2_clay_diff',
+        'glicko2_grass_diff',
         'form_diff',
     ]
 
