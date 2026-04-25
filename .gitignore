@@ -205,3 +205,35 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+*.csv
+# Latex
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.brf
+*.fdb_latexmk
+*.fls
+*.glg
+*.glo
+*.gls
+*.idx
+*.ilg
+*.ind
+*.ist
+*.log
+*.lof
+*.lot
+*.nav
+*.out
+*.run.xml
+*.snm
+*.toc
+*.vrb
+*.synctex.gz
+*.synctex.gz(busy)
+*.xdv
+*.bcf-SAVE-ERROR
+# Model artifacts
+*.joblib
+*.db

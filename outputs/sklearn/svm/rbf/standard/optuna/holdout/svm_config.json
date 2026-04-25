@@ -1,0 +1,21 @@
+{
+    "model_type": "C-SVM",
+    "kernel": "rbf",
+    "best_params": {
+        "C": 3.7411067344892577,
+        "gamma": "auto"
+    },
+    "val_accuracy": 0.65664448014689,
+    "features_used": [
+        "elo_diff",
+        "elo_hard_diff",
+        "rank_points_diff",
+        "elo_clay_diff",
+        "elo_grass_diff",
+        "rank_diff",
+        "form_diff",
+        "height_diff",
+        "round_BR",
+        "age_diff"
+    ]
+}

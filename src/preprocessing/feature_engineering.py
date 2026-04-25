@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
-from src.preprocessing.load_data import load_data
-from src.config.data_config import YEARS, SURFACES
+from .load_data import load_data
+from ..config.data_config import YEARS, SURFACES
 
 
 def build_basic_features(df: pd.DataFrame) -> pd.DataFrame:
