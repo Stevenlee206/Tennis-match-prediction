@@ -1,0 +1,22 @@
+{
+    "model_type": "RandomForest",
+    "optimizer": "Optuna",
+    "best_params": {
+        "n_estimators": 136,
+        "max_depth": 16,
+        "min_samples_split": 6
+    },
+    "val_accuracy": 0.6554969015377553,
+    "features_used": [
+        "elo_diff",
+        "elo_hard_diff",
+        "rank_points_diff",
+        "elo_clay_diff",
+        "elo_grass_diff",
+        "rank_diff",
+        "form_diff",
+        "height_diff",
+        "round_BR",
+        "age_diff"
+    ]
+}

@@ -1,0 +1,62 @@
+{
+    "model_type": "RandomForest",
+    "optimizer": "GridSearch",
+    "grid_params": {
+        "n_estimators_grid": [
+            20,
+            32,
+            45,
+            58,
+            71,
+            84,
+            97,
+            110,
+            122,
+            135,
+            148,
+            161,
+            174,
+            187,
+            200
+        ],
+        "max_depth_grid": [
+            10,
+            14,
+            19,
+            24,
+            28,
+            33,
+            38,
+            43,
+            47,
+            52,
+            57,
+            62,
+            66,
+            71,
+            76,
+            81,
+            85,
+            90,
+            95,
+            100
+        ]
+    },
+    "best_params": {
+        "n_estimators": 122,
+        "max_depth": 10
+    },
+    "val_accuracy": 0.6571035115905439,
+    "features_used": [
+        "elo_diff",
+        "elo_hard_diff",
+        "rank_points_diff",
+        "elo_clay_diff",
+        "elo_grass_diff",
+        "rank_diff",
+        "form_diff",
+        "height_diff",
+        "round_BR",
+        "age_diff"
+    ]
+}

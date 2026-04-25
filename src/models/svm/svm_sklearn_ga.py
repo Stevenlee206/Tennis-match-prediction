@@ -134,10 +134,6 @@ def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, po
     model_path = output_dir / "svm_model.joblib"
     scaler_path = output_dir / "svm_scaler.joblib"
 
-    if model_path.exists() and scaler_path.exists():
-        print(f"\n[!] Found existing artifacts in {output_dir.name}. Skipping training and inferring immediately!")
-        return joblib.load(model_path), joblib.load(scaler_path)
-
     print("Scaling features...")
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
