@@ -7,7 +7,7 @@ import seaborn as sns
 from pathlib import Path
 from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import accuracy_score
+from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
 import warnings
 from sklearn.exceptions import ConvergenceWarning
 
@@ -18,9 +18,9 @@ def plot_grid_history(c_values, accuracies, save_path):
     plt.figure(figsize=(10, 6))
     sns.lineplot(x=c_values, y=accuracies, marker="o", color='teal')
     plt.xscale('log') # Log scale is vital for visualizing the C parameter
-    plt.title("Grid Search Optimization (Validation Accuracy vs. C)")
+    plt.title("Nested Grid Search Optimization (Inner CV Accuracy vs. C)")
     plt.xlabel("C Value (Log Scale)")
-    plt.ylabel("Validation Accuracy")
+    plt.ylabel("Inner CV Accuracy")
     plt.grid(True, linestyle="--", alpha=0.7)
     plt.tight_layout()
     plt.savefig(save_path / "grid_search_history.png", dpi=300)
@@ -54,63 +54,65 @@ def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, c_
     model_path = output_dir / "svm_model.joblib"
     scaler_path = output_dir / "svm_scaler.joblib"
 
+    # 1. Combine Train and Val for Inner Cross-Validation
+    X_train_full = pd.concat([X_train, X_val], axis=0)
+    y_train_full = pd.concat([y_train, y_val], axis=0)
+
     print("Scaling features...")
     scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_val_scaled = scaler.transform(X_val)
+    X_train_full_scaled = scaler.fit_transform(X_train_full)
 
-    # Silence Convergence warnings during tuning
     warnings.filterwarnings("ignore", category=ConvergenceWarning)
 
-    # Generate the grid in logarithmic space
+    # 2. Define the discrete grid
     c_grid = np.logspace(np.log10(c_min), np.log10(c_max), num=c_steps)
-    
-    best_c = None
-    best_val_acc = -1
-    history_accuracies = []
+    param_grid = {'C': c_grid}
 
-    print(f"\n--- Starting Grid Search ({c_steps} Steps from {c_min} to {c_max}) ---")
+    print(f"\n--- Starting Nested GridSearchCV ({c_steps} Steps from {c_min} to {c_max}) ---")
     
-    for i, c_val in enumerate(c_grid):
-        print(f"  -> Evaluating Step {i+1:02d}/{c_steps} [C = {c_val:10.5f}]... ", end="", flush=True)
-        
-        clf = SVC(C=c_val, kernel=kernel, max_iter=20000, random_state=42)
-        clf.fit(X_train_scaled, y_train)
-        acc = accuracy_score(y_val, clf.predict(X_val_scaled))
-        
-        history_accuracies.append(acc)
-        print(f"Acc: {acc:.4f}")
-        
-        if acc > best_val_acc:
-            best_val_acc = acc
-            best_c = c_val
+    # 3. Use TimeSeriesSplit for the Inner Loop
+    tscv = TimeSeriesSplit(n_splits=3)
+    
+    grid_search = GridSearchCV(
+        estimator=SVC(kernel=kernel, max_iter=20000, random_state=42),
+        param_grid=param_grid,
+        cv=tscv,
+        scoring='accuracy',
+        n_jobs=-1,
+        verbose=1
+    )
+    
+    grid_search.fit(X_train_full_scaled, y_train_full)
+
+    best_params = grid_search.best_params_
+    best_acc = grid_search.best_score_
+    final_clf = grid_search.best_estimator_
 
     print(f"\nOptimization Complete.")
-    print(f"Best parameter found (C): {best_c:.6f} with Accuracy: {best_val_acc:.4f}")
+    print(f"Best parameter found (C): {best_params['C']:.6f} with Inner CV Accuracy: {best_acc:.4f}")
     
-    print(f"Training final model with optimal parameters ({kernel} kernel)...")
-    final_clf = SVC(C=best_c, kernel=kernel, random_state=42)
-    final_clf.fit(X_train_scaled, y_train)
-    
+    # 4. Save Artifacts
     joblib.dump(final_clf, model_path)
     joblib.dump(scaler, scaler_path)
     
     config = {
         "model_type": "C-SVM",
-        "optimizer": "GridSearch",
+        "optimizer": "Nested_GridSearch_TimeSeriesSplit",
         "kernel": kernel,
         "c_min": c_min,
         "c_max": c_max,
         "c_steps": c_steps,
-        "best_C": best_c,
-        "val_accuracy": best_val_acc,
+        "best_C": best_params['C'],
+        "inner_cv_accuracy": best_acc,
         "features_used": list(X_train.columns)
     }
     with open(output_dir / "svm_config.json", "w") as f:
         json.dump(config, f, indent=4)
         
     print("Generating plots...")
-    plot_grid_history(c_grid, history_accuracies, reports_dir)
+    # Extract GridSearchCV results to plot the history curve
+    cv_results = grid_search.cv_results_
+    plot_grid_history(c_grid, cv_results['mean_test_score'], reports_dir)
     
     if kernel == "linear":
         plot_feature_importance(final_clf, X_train.columns, reports_dir)

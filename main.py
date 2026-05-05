@@ -1,7 +1,6 @@
 import argparse
 from pathlib import Path
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, classification_report
 
 from src.preprocessing.preprocessing import Preprocessing
 
@@ -107,33 +106,28 @@ def main():
         # --- DYNAMIC PIPELINE EXECUTION ---
         if args.model == "svm":
             if args.optimizer == "pso":
-                model, scaler = run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, n_particles=args.particles, n_iterations=args.iterations, kernel=args.kernel)
+                run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, n_particles=args.particles, n_iterations=args.iterations, kernel=args.kernel)
             elif args.optimizer == "ga":
-                model, scaler = run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, pop_size=args.population, n_generations=args.generations, kernel=args.kernel)
+                run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, pop_size=args.population, n_generations=args.generations, kernel=args.kernel)
             elif args.optimizer == "grid":
-                model, scaler = run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, c_min=args.c_min, c_max=args.c_max, c_steps=args.c_steps, kernel=args.kernel)
+                run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, c_min=args.c_min, c_max=args.c_max, c_steps=args.c_steps, kernel=args.kernel)
             else:
                 if args.mode == "standard":
-                    model, scaler = run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, n_trials=args.n_trials, kernel=args.kernel)
+                    run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, n_trials=args.n_trials, kernel=args.kernel)
                 else:
-                    model, scaler = run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, n_trials=args.n_trials, n_epochs=args.epochs, kernel=args.kernel)
+                    run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, n_trials=args.n_trials, n_epochs=args.epochs, kernel=args.kernel)
         
         elif args.model == "rf":
             if args.optimizer == "pso":
-                model, scaler = run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, n_particles=args.particles, n_iterations=args.iterations, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, depth_min=args.rf_depth_min, depth_max=args.rf_depth_max)
+                run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, n_particles=args.particles, n_iterations=args.iterations, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, depth_min=args.rf_depth_min, depth_max=args.rf_depth_max)
             elif args.optimizer == "ga":
-                model, scaler = run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, pop_size=args.population, n_generations=args.generations, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, depth_min=args.rf_depth_min, depth_max=args.rf_depth_max)
+                run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, pop_size=args.population, n_generations=args.generations, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, depth_min=args.rf_depth_min, depth_max=args.rf_depth_max)
             elif args.optimizer == "grid":
-                model, scaler = run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, n_est_steps=args.rf_n_est_steps, depth_min=args.rf_depth_min, depth_max=args.rf_depth_max, depth_steps=args.rf_depth_steps)
+                run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, n_est_steps=args.rf_n_est_steps, depth_min=args.rf_depth_min, depth_max=args.rf_depth_max, depth_steps=args.rf_depth_steps)
             else:
-                model, scaler = run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, n_trials=args.n_trials, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, depth_min=args.rf_depth_min, depth_max=args.rf_depth_max)
+                run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, n_trials=args.n_trials, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, depth_min=args.rf_depth_min, depth_max=args.rf_depth_max)
 
-        print("\n--- Final Evaluation on Test Set ---")
-        X_test_scaled = scaler.transform(X_test)
-        y_pred = model.predict(X_test_scaled)
-
-        print(f"\n>>> Final Test Accuracy: {accuracy_score(y_test, y_pred):.4f} <<<")
-        print(classification_report(y_test, y_pred))
+        print("\n--- Training and Tuning Complete ---")
     
     # ==========================================
     # ROUTE B: WALK-FORWARD VALIDATION
@@ -141,7 +135,6 @@ def main():
     elif args.validation == "walk_forward":
         all_years = sorted(data['year'].unique())
         MIN_TRAIN_YEARS = 5
-        fold_results = []
 
         for test_idx in range(MIN_TRAIN_YEARS + 1, len(all_years)):
             test_year = all_years[test_idx]
@@ -149,7 +142,7 @@ def main():
             train_years = all_years[:test_idx - 1]
 
             print(f"\n" + "="*50)
-            print(f" FOLD: Test Year {test_year}")
+            print(f" FOLD: Tuning model for Test Year {test_year}")
             print("="*50)
 
             fold_out = BASE_OUT / f"fold_{test_year}"
@@ -157,57 +150,38 @@ def main():
 
             train_df = data[data['year'].isin(train_years)]
             val_df = data[data['year'] == val_year]
-            test_df = data[data['year'] == test_year]
 
             X_train = train_df.drop(columns=['target', 'year'], errors='ignore')
             y_train = train_df['target']
             X_val = val_df.drop(columns=['target', 'year'], errors='ignore')
             y_val = val_df['target']
-            X_test = test_df.drop(columns=['target', 'year'], errors='ignore')
-            y_test = test_df['target']
 
             if args.model == "svm":
                 if args.optimizer == "pso":
-                    model, scaler = run_pipeline(X_train, y_train, X_val, y_val, fold_out, fold_rep, n_particles=args.particles, n_iterations=args.iterations, kernel=args.kernel)
+                    run_pipeline(X_train, y_train, X_val, y_val, fold_out, fold_rep, n_particles=args.particles, n_iterations=args.iterations, kernel=args.kernel)
                 elif args.optimizer == "ga":
-                    model, scaler = run_pipeline(X_train, y_train, X_val, y_val, fold_out, fold_rep, pop_size=args.population, n_generations=args.generations, kernel=args.kernel)
+                    run_pipeline(X_train, y_train, X_val, y_val, fold_out, fold_rep, pop_size=args.population, n_generations=args.generations, kernel=args.kernel)
                 elif args.optimizer == "grid":
-                    model, scaler = run_pipeline(X_train, y_train, X_val, y_val, fold_out, fold_rep, c_min=args.c_min, c_max=args.c_max, c_steps=args.c_steps, kernel=args.kernel)
+                    run_pipeline(X_train, y_train, X_val, y_val, fold_out, fold_rep, c_min=args.c_min, c_max=args.c_max, c_steps=args.c_steps, kernel=args.kernel)
                 else:
                     if args.mode == "standard":
-                        model, scaler = run_pipeline(X_train, y_train, X_val, y_val, fold_out, fold_rep, n_trials=args.n_trials, kernel=args.kernel)
+                        run_pipeline(X_train, y_train, X_val, y_val, fold_out, fold_rep, n_trials=args.n_trials, kernel=args.kernel)
                     else:
-                        model, scaler = run_pipeline(X_train, y_train, X_val, y_val, fold_out, fold_rep, n_trials=args.n_trials, n_epochs=args.epochs, kernel=args.kernel)
+                        run_pipeline(X_train, y_train, X_val, y_val, fold_out, fold_rep, n_trials=args.n_trials, n_epochs=args.epochs, kernel=args.kernel)
 
             elif args.model == "rf":
                 if args.optimizer == "pso":
-                    model, scaler = run_pipeline(X_train, y_train, X_val, y_val, fold_out, fold_rep, n_particles=args.particles, n_iterations=args.iterations, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, depth_min=args.rf_depth_min, depth_max=args.rf_depth_max)
+                    run_pipeline(X_train, y_train, X_val, y_val, fold_out, fold_rep, n_particles=args.particles, n_iterations=args.iterations, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, depth_min=args.rf_depth_min, depth_max=args.rf_depth_max)
                 elif args.optimizer == "ga":
-                    model, scaler = run_pipeline(X_train, y_train, X_val, y_val, fold_out, fold_rep, pop_size=args.population, n_generations=args.generations, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, depth_min=args.rf_depth_min, depth_max=args.rf_depth_max)
+                    run_pipeline(X_train, y_train, X_val, y_val, fold_out, fold_rep, pop_size=args.population, n_generations=args.generations, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, depth_min=args.rf_depth_min, depth_max=args.rf_depth_max)
                 elif args.optimizer == "grid":
-                    model, scaler = run_pipeline(X_train, y_train, X_val, y_val, fold_out, fold_rep, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, n_est_steps=args.rf_n_est_steps, depth_min=args.rf_depth_min, depth_max=args.rf_depth_max, depth_steps=args.rf_depth_steps)
+                    run_pipeline(X_train, y_train, X_val, y_val, fold_out, fold_rep, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, n_est_steps=args.rf_n_est_steps, depth_min=args.rf_depth_min, depth_max=args.rf_depth_max, depth_steps=args.rf_depth_steps)
                 else:
-                    model, scaler = run_pipeline(X_train, y_train, X_val, y_val, fold_out, fold_rep, n_trials=args.n_trials, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, depth_min=args.rf_depth_min, depth_max=args.rf_depth_max)
-
-            X_test_scaled = scaler.transform(X_test)
-            y_pred = model.predict(X_test_scaled)
-
-            test_acc = accuracy_score(y_test, y_pred)
-            print(f">>> Fold Test Accuracy for {test_year}: {test_acc:.4f} <<<")
-            
-            fold_results.append({
-                'test_year': test_year,
-                'matches': len(y_test),
-                'accuracy': test_acc
-            })
+                    run_pipeline(X_train, y_train, X_val, y_val, fold_out, fold_rep, n_trials=args.n_trials, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, depth_min=args.rf_depth_min, depth_max=args.rf_depth_max)
 
         print("\n" + "="*50)
-        print(" WALK-FORWARD VALIDATION COMPLETE")
+        print(" WALK-FORWARD TRAINING & TUNING COMPLETE")
         print("="*50)
-        
-        total_matches = sum(res['matches'] for res in fold_results)
-        weighted_acc_sum = sum(res['accuracy'] * res['matches'] for res in fold_results)
-        print(f"OVERALL WALK-FORWARD ACCURACY: {(weighted_acc_sum / total_matches):.4f}")
 
 if __name__ == "__main__":
     main()
