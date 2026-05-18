@@ -22,12 +22,12 @@ def prepare_loaders(df, target_col='target', batch_size=64):
 
     # Chia Train / (Val + Test)
     X_train_raw, X_temp, y_train, y_temp = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+        X, y, test_size=0.2,shuffle=False,  stratify=None
     )
 
     # Chia Val / Test (50/50 của 20% còn lại)
     X_val_raw, X_test_raw, y_val, y_test = train_test_split(
-        X_temp, y_temp, test_size=0.5, random_state=42, stratify=y_temp
+        X_temp, y_temp,test_size= 0.2, shuffle=False,  stratify=None
     )
 
     scaler = StandardScaler()
@@ -35,7 +35,7 @@ def prepare_loaders(df, target_col='target', batch_size=64):
     X_val = scaler.transform(X_val_raw)
     X_test = scaler.transform(X_test_raw)
 
-    train_loader = DataLoader(TennisDataset(X_train, y_train), batch_size=batch_size, shuffle=True)
+    train_loader = DataLoader(TennisDataset(X_train, y_train), batch_size=batch_size, shuffle=False )
     val_loader = DataLoader(TennisDataset(X_val, y_val), batch_size=batch_size)
     test_loader = DataLoader(TennisDataset(X_test, y_test), batch_size=batch_size)
 

@@ -1,5 +1,4 @@
 from src.models.model import TennisNet
-from utils.dataset import prepare_loaders
 from src.preprocessing.preprocessing import Preprocessing
 import torch
 import numpy as np
@@ -10,17 +9,18 @@ from utils.visualizer import plot_learning_curves, plot_hyperparameter_heatmap
 
 def train():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     print(f"Bắt đầu huấn luyện trên: {device}")
 
     # 1. Load Data
     preprocessor = Preprocessing()
     df = preprocessor.run()
     train_loader, val_loader, test_loader, input_dim = prepare_loaders(df)
+    # learning_rates = [2.2e-3]
+    # weight_decays = [7.7e-5]
+    learning_rates = np.logspace(-4, 1, num=2)
 
-    learning_rates = np.logspace(-4, -0, num=10)
-    # learning_rates = [1.8e-3]
-    # weight_decays = [3.2e-3]
-    weight_decays = np.logspace(-5, -1, num=10)
+    weight_decays = np.logspace(-5, -1, num=2)
 
     best_acc = 0
     best_model_state = None
@@ -36,7 +36,7 @@ def train():
             optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
 
             history = {'train_loss': [], 'val_acc': []}
-            epochs = 5
+            epochs = 20
 
             for epoch in range(epochs):
                 model.train()
