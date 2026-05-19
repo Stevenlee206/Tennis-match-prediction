@@ -1,3 +1,9 @@
+import sys
+import os
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.stdout.reconfigure(encoding='utf-8')
+
 from src.models.model import TennisNet
 from src.preprocessing.preprocessing import Preprocessing
 import torch
