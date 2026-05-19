@@ -1,0 +1,27 @@
+{
+    "model_type": "PyTorch_MLP",
+    "best_params": {
+        "n_layers": 2,
+        "n_units_l0": 69,
+        "n_units_l1": 142,
+        "dropout": 0.4710753125355339,
+        "lr": 0.0009422136655675826,
+        "weight_decay": 1.3057961649858344e-05,
+        "activation": "leaky_relu"
+    },
+    "hidden_layers": [
+        69,
+        142
+    ],
+    "val_accuracy": 0.6778825546506644,
+    "pca_applied": false,
+    "weight_strategy": "none",
+    "bias_metrics": {
+        "class_1_prediction_rate": 45.14,
+        "elo_reliance": 86.91,
+        "elo_baseline_accuracy": 64.34,
+        "upset_prediction_accuracy": 21.81,
+        "rank_reliance": 82.53,
+        "final_accuracy": 66.8
+    }
+}

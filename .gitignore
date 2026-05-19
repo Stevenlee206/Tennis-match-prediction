@@ -237,3 +237,6 @@ __marimo__/
 # Model artifacts
 *.joblib
 *.db
+*.pth
+*.pt
+.vscode/

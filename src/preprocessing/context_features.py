@@ -1,12 +1,12 @@
 import pandas as pd
 import numpy as np
 
-def apply_fatigue_and_clutch_metrics(df):
+def apply_fatigue_and_clutch_metrics(df, train_idx: int):
     """
     Calculates in-tournament cumulative fatigue and 365-day rolling clutch defense.
     """
     # 1. Fill missing minutes with the median to avoid NaN math errors
-    median_mins = df['minutes'].median()
+    median_mins = df['minutes'].iloc[:train_idx].median()
     df['minutes'] = df['minutes'].fillna(median_mins)
     
     # Store original index for safe mapping
@@ -71,11 +71,15 @@ def apply_fatigue_and_clutch_metrics(df):
         df[f'w_{metric}'] = df['match_idx'].map(win_stats[metric])
         df[f'l_{metric}'] = df['match_idx'].map(lose_stats[metric])
         
-        # Clean infinities and NaNs
         df[f'w_{metric}'] = df[f'w_{metric}'].replace([np.inf, -np.inf], np.nan)
         df[f'l_{metric}'] = df[f'l_{metric}'].replace([np.inf, -np.inf], np.nan)
         
-        df[f'w_{metric}'] = df[f'w_{metric}'].fillna(df[f'w_{metric}'].median())
-        df[f'l_{metric}'] = df[f'l_{metric}'].fillna(df[f'l_{metric}'].median())
+        # FIT: Get final trailing medians from train only
+        w_med = df[f'w_{metric}'].iloc[:train_idx].median()
+        l_med = df[f'l_{metric}'].iloc[:train_idx].median()
+        
+        # TRANSFORM
+        df[f'w_{metric}'] = df[f'w_{metric}'].fillna(w_med)
+        df[f'l_{metric}'] = df[f'l_{metric}'].fillna(l_med)
         
     return df.drop(columns=['match_idx'])

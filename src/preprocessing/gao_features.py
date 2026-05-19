@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-def apply_historical_serve_metrics(df):
+def apply_historical_serve_metrics(df, train_idx: int):
     """Calculates 365-day rolling historical averages for all Gao serve metrics."""
     if not pd.api.types.is_datetime64_any_dtype(df['tourney_date']):
         df['tourney_date'] = pd.to_datetime(df['tourney_date'], format='%Y%m%d')
@@ -21,6 +21,7 @@ def apply_historical_serve_metrics(df):
     losers.columns = ['match_idx', 'tourney_date', 'player_id', 'ace', 'df', '1stIn', 'svpt', '1stWon', '2ndIn', '2ndWon']
     losers['is_winner'] = False
     
+    # gao_features.py
     timeline = pd.concat([winners, losers]).sort_values(['player_id', 'tourney_date'])
     timeline.index = timeline['tourney_date']
     
@@ -48,18 +49,18 @@ def apply_historical_serve_metrics(df):
         df[f'w_{metric}'] = df['match_idx'].map(win_stats[metric])
         df[f'l_{metric}'] = df['match_idx'].map(lose_stats[metric])
         
-        # ---> THE FIX: Clean up Infinities and NaNs <---
-        # Convert Inf to NaN
         df[f'w_{metric}'] = df[f'w_{metric}'].replace([np.inf, -np.inf], np.nan)
         df[f'l_{metric}'] = df[f'l_{metric}'].replace([np.inf, -np.inf], np.nan)
         
-        # Fill NaN with the median of the column
-        df[f'w_{metric}'] = df[f'w_{metric}'].fillna(df[f'w_{metric}'].median())
-        df[f'l_{metric}'] = df[f'l_{metric}'].fillna(df[f'l_{metric}'].median())
-    
-    df = df.drop(columns=['match_idx', 'w_2ndIn', 'l_2ndIn'])
+        # FIT: Medians from train only
+        w_med = df[f'w_{metric}'].iloc[:train_idx].median()
+        l_med = df[f'l_{metric}'].iloc[:train_idx].median()
+        
+        # TRANSFORM
+        df[f'w_{metric}'] = df[f'w_{metric}'].fillna(w_med)
+        df[f'l_{metric}'] = df[f'l_{metric}'].fillna(l_med)
     return df
-def create_gao_dataset(df):
+def create_gao_dataset(df, train_idx: int):
     """Randomizes P1 and P2, calculates differences, and handles missing values."""
     target_features = [
         'ht', 'age', 'AceVsDf', 'FirstIn1stServe', 'FirstWonFirstIn', 'SecondWonSecondIn'
@@ -68,10 +69,14 @@ def create_gao_dataset(df):
     # Replace infinite values resulting from division by zero
     df = df.replace([np.inf, -np.inf], np.nan)
     
-    # Impute missing values with medians per the Gao paper
+    # Impute missing values with medians from the TRAINING SET ONLY
     for col in df.select_dtypes(include=[np.number]).columns:
         if df[col].isnull().any():
-            df[col] = df[col].fillna(df[col].median())
+            # FIT: Calculate median strictly on the training slice
+            train_median = df[col].iloc[:train_idx].median()
+            
+            # TRANSFORM: Apply that median globally
+            df[col] = df[col].fillna(train_median)
 
     # Build the final DataFrame
     final_df = pd.DataFrame()
