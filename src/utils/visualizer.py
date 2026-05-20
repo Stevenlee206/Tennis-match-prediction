@@ -1,6 +1,13 @@
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+
+def _show_or_save_plot(filename):
+    plt.savefig(filename, dpi=300, bbox_inches='tight')
+    print(f"Mô hình lưu biểu đồ tại: {filename}")
+    plt.close()
 
 def plot_learning_curves(history):
     fig, ax1 = plt.subplots(figsize=(10, 5))
@@ -16,7 +23,7 @@ def plot_learning_curves(history):
     ax2.tick_params(axis='y', labelcolor='tab:blue')
 
     plt.title('Convergence Speed (Loss vs Accuracy)')
-    plt.show()
+    _show_or_save_plot('learning_curves.png')
 
 def plot_hyperparameter_heatmap(results, lr_list, wd_list):
     plt.figure(figsize=(12, 8))
@@ -26,4 +33,4 @@ def plot_hyperparameter_heatmap(results, lr_list, wd_list):
     plt.xlabel('Weight Decay')
     plt.ylabel('Learning Rate')
     plt.title('Hyperparameter Grid Search (Validation Accuracy)')
-    plt.show()
+    _show_or_save_plot('hyperparameter_heatmap.png')
