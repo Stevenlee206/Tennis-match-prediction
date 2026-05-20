@@ -6,6 +6,7 @@ import joblib
 import json
 import numpy as np
 from sklearn.metrics import accuracy_score, classification_report
+from datetime import datetime
 
 def evaluate_model_bias(y_true, y_pred, X_raw):
     """
@@ -75,7 +76,7 @@ def main():
     parser = argparse.ArgumentParser(description="ATP Tennis Match Prediction Pipeline")
     
     # --- ADD MODEL FLAG ---
-    parser.add_argument("--model", type=str, choices=["svm", "rf", "pytorch_svm", "tabnet", "deepforest", "pytorch_mlp"], default="svm", help="Algorithm to use")    
+    parser.add_argument("--model", type=str, choices=["svm", "rf", "pytorch_svm", "tabnet", "deepforest", "pytorch_mlp", "predictive_coding"], default="svm", help="Algorithm to use")    
     # --- ADDED PYTORCH FLAGS ---
     parser.add_argument("--torch_opt", type=str, choices=["adam", "rmsprop", "sgd", "sgd_nesterov"], default="adam", help="Optimizer for PyTorch SVM")
     parser.add_argument("--torch_sched", type=str, choices=["constant", "cosine", "step", "plateau"], default="cosine", help="Learning rate scheduler for PyTorch SVM")
@@ -169,9 +170,12 @@ def main():
         model_subpath = "tabnet"      # Sibling to sklearn
     elif args.model == "deepforest":
         model_subpath = "deepforest"
+    elif args.model == "predictive_coding":
+        model_subpath = "predictive_coding"
     
-    BASE_OUT = BASE_DIR / "outputs" / model_subpath / args.mode / args.optimizer / args.validation
-    BASE_REP = BASE_DIR / "reports" / "figures" / model_subpath / args.mode / args.optimizer / args.validation
+    run_timestamp = datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
+    BASE_OUT = BASE_DIR / "outputs" / model_subpath / args.mode / args.optimizer / args.validation / run_timestamp
+    BASE_REP = BASE_DIR / "reports" / "figures" / model_subpath / args.mode / args.optimizer / args.validation / run_timestamp
 
     # --- DYNAMIC IMPORTS ---
     if args.model == "pytorch_svm":
@@ -180,6 +184,8 @@ def main():
         from src.models.mlp.mlp_pytorch_optuna import run_pytorch_mlp_pipeline as run_pipeline
     elif args.model == "deepforest":
         from src.models.rf.deepforest_optuna import run_deepforest_pipeline as run_pipeline
+    elif args.model == "predictive_coding":
+        from src.models.pc.pc_optuna import run_pc_pipeline as run_pipeline
     elif args.model == "svm":
         if args.optimizer == "pso":
             if args.mode == "sgd": raise NotImplementedError("PSO is for 'standard' mode SVM.")
@@ -219,9 +225,10 @@ def main():
             y_val = y_val[X_val['is_augmented'] == 0]
             X_val = X_val[X_val['is_augmented'] == 0]
 
-            # 2. Drop the flag so models don't train on it
-            X_train = X_train.drop(columns=['is_augmented'])
-            X_val = X_val.drop(columns=['is_augmented'])
+            # 2. Drop the flag so models don't train on it (unless it's predictive_coding, we drop inside pipeline to keep val chunks clean)
+            if args.model != "predictive_coding":
+                X_train = X_train.drop(columns=['is_augmented'])
+                X_val = X_val.drop(columns=['is_augmented'])
 
         print(f"Holdout Splits -> Train: {len(X_train)} | Val: {len(X_val)}")
         
@@ -265,6 +272,11 @@ def main():
                          n_trees_min=args.df_n_trees_min, n_trees_max=args.df_n_trees_max,
                          max_depth_min=args.df_depth_min, max_depth_max=args.df_depth_max)
 
+        elif args.model == "predictive_coding":
+            run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, 
+                         n_trials=args.n_trials, validation=args.validation, optimizer=args.optimizer,
+                         weight_strategy=args.weight_strategy, upset_weight=args.upset_weight)
+
         elif args.model == "rf":
             if args.optimizer == "pso":
                 run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, n_particles=args.particles, n_iterations=args.iterations, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, depth_min=args.rf_depth_min, depth_max=args.rf_depth_max)
@@ -296,6 +308,8 @@ def main():
             model_name, scaler_name, config_name = "mlp_pytorch_model.pth", "mlp_pytorch_scaler.joblib", "mlp_pytorch_config.json"
         elif args.model == "deepforest":
             model_name, scaler_name, config_name = "deepforest_model.joblib", "deepforest_scaler.joblib", "deepforest_config.json"
+        elif args.model == "predictive_coding":
+            model_name, scaler_name, config_name = "pc_model.npz", "pc_scaler.joblib", "pc_config.json"
         else:
             model_name, scaler_name, config_name = f"{args.rf_variant}_model.joblib", f"{args.rf_variant}_scaler.joblib", f"{args.rf_variant}_config.json"
             
@@ -307,7 +321,8 @@ def main():
 
         if check_path.exists() and scaler_path.exists():
             scaler = joblib.load(scaler_path)
-            X_val_scaled = scaler.transform(X_val)
+            X_val_clean = X_val.drop(columns=['is_augmented'], errors='ignore')
+            X_val_scaled = scaler.transform(X_val_clean)
             
             # Handle PCA if enabled
             if hasattr(args, 'add_pca') and args.add_pca:
@@ -315,6 +330,8 @@ def main():
                     # Flips 'pytorch_svm' -> 'svm_pytorch' and 'pytorch_mlp' -> 'mlp_pytorch'
                     prefix = args.model.replace('pytorch_', '') + '_pytorch' if 'pytorch' in args.model else args.model
                     pca_name = f"{prefix}_pca.joblib"
+                elif args.model == "predictive_coding":
+                    pca_name = "pc_pca.joblib"
                 elif args.model == "svm":
                     if args.mode == "sgd":
                         pca_name = "svm_sgd_pca.joblib"
@@ -354,6 +371,23 @@ def main():
                     preds_raw = best_model(torch.FloatTensor(X_val_scaled).to(device))
                     # MLP outputs logits. Sigmoid > 0.5 gets the binary class
                     y_pred_val = (torch.sigmoid(preds_raw) > 0.5).cpu().numpy().astype(int).flatten()              
+            elif args.model == "predictive_coding":
+                # Predictive Coding is numpy based
+                from src.model.Predictive_Coding.pc_network import PredictiveCodingNetwork, PCNetworkConfig
+                with open(config_path, 'r') as f:
+                    cfg = json.load(f)
+                
+                pc_cfg = PCNetworkConfig(**cfg.get('best_params', {}))
+                
+                # layer sizes include in and out
+                layer_sizes = [X_val_scaled.shape[1], *cfg['model_params']['hidden_sizes'], 1]
+                best_model = PredictiveCodingNetwork(layer_sizes=layer_sizes, cfg=pc_cfg)
+                
+                # Load weights
+                state = dict(np.load(model_path))
+                best_model.load_state_dict(state)
+                probs = best_model.predict_proba(X_val_scaled)
+                y_pred_val = (probs >= 0.5).astype(int)
             else: # SKLearn / DeepForest models
                 best_model = joblib.load(model_path)
                 y_pred_val = best_model.predict(X_val_scaled)
@@ -379,7 +413,8 @@ def main():
         # --- PREPARE POOL FOR TRAINING ---
         # We hide the flag from the model, but keep the rows for balanced training folds
         if 'is_augmented' in X_train_val_pool.columns:
-            X_train_val_pool = X_train_val_pool.drop(columns=['is_augmented'])
+            if args.model != "predictive_coding":
+                X_train_val_pool = X_train_val_pool.drop(columns=['is_augmented'])
             
         print(f"Total Rows for TSCV: {len(X_all)}")
         
@@ -404,12 +439,17 @@ def main():
                          add_pca=args.add_pca, validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight,
                          torch_opt=args.torch_opt, torch_sched=args.torch_sched)                         
         elif args.model == "deepforest":
-            run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, 
+            run_pipeline(X_train_val_pool, y_train_val_pool, None, None, global_out, global_rep, 
                          n_trials=args.n_trials, add_pca=args.add_pca, validation=args.validation, 
                          weight_strategy=args.weight_strategy, upset_weight=args.upset_weight,
                          max_layers_min=args.df_max_layers_min, max_layers_max=args.df_max_layers_max,
                          n_trees_min=args.df_n_trees_min, n_trees_max=args.df_n_trees_max,
                          max_depth_min=args.df_depth_min, max_depth_max=args.df_depth_max)
+
+        elif args.model == "predictive_coding":
+            run_pipeline(X_train_val_pool, y_train_val_pool, None, None, global_out, global_rep, 
+                         n_trials=args.n_trials, validation=args.validation, optimizer=args.optimizer,
+                         weight_strategy=args.weight_strategy, upset_weight=args.upset_weight)
 
         elif args.model == "rf":
             run_pipeline(X_train_val_pool, y_train_val_pool, None, None, global_out, global_rep, 
@@ -431,6 +471,8 @@ def main():
             model_name, scaler_name, config_name = "svm_pytorch_model.pth", "svm_pytorch_scaler.joblib", "svm_pytorch_config.json"
         elif args.model == "deepforest":
             model_name, scaler_name, config_name = "deepforest_model.joblib", "deepforest_scaler.joblib", "deepforest_config.json"
+        elif args.model == "predictive_coding":
+            model_name, scaler_name, config_name = "pc_model.npz", "pc_scaler.joblib", "pc_config.json"
         else:
             model_name, scaler_name, config_name = f"{args.rf_variant}_model.joblib", f"{args.rf_variant}_scaler.joblib", f"{args.rf_variant}_config.json"
             
@@ -458,6 +500,8 @@ def main():
             if hasattr(args, 'add_pca') and args.add_pca:
                 if args.model in ["pytorch_svm", "tabnet", "deepforest"]:
                     pca_name = f"{args.model.replace('pytorch_svm', 'svm_pytorch')}_pca.joblib"
+                elif args.model == "predictive_coding":
+                    pca_name = "pc_pca.joblib"
                 elif args.model == "svm":
                     pca_name = f"{args.kernel}_pca.joblib"
                 else:
@@ -479,7 +523,22 @@ def main():
                 with torch.no_grad():
                     preds_raw = best_model(torch.FloatTensor(X_val_scaled).to(device))
                     y_pred_val = (preds_raw > 0).cpu().numpy().astype(int)
+            elif args.model == "predictive_coding":
+                from src.model.Predictive_Coding.pc_network import PredictiveCodingNetwork, PCNetworkConfig
+                with open(config_path, 'r') as f:
+                    cfg = json.load(f)
                 
+                pc_cfg = PCNetworkConfig(**cfg.get('best_params', {}))
+                
+                # layer sizes include in and out
+                layer_sizes = [X_val_scaled.shape[1], *cfg['model_params']['hidden_sizes'], 1]
+                best_model = PredictiveCodingNetwork(layer_sizes=layer_sizes, cfg=pc_cfg)
+                
+                # Load weights
+                state = dict(np.load(model_path))
+                best_model.load_state_dict(state)
+                probs = best_model.predict_proba(X_val_scaled)
+                y_pred_val = (probs >= 0.5).astype(int)
             else: # SKLearn / DeepForest models
                 best_model = joblib.load(model_path)
                 y_pred_val = best_model.predict(X_val_scaled)

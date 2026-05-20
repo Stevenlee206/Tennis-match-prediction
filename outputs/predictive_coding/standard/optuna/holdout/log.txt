@@ -1,0 +1,25 @@
+Predictive Coding Final Training Log
+Hyperparameters: epochs=20, batch_size=256, lr=0.0287
+================================================================================
+Epoch 001/20 | Train Energy: 0.1134 | Train Loss (BCE): 0.6673 | Train Acc: 0.5997 | Val Acc: 0.5932
+Epoch 002/20 | Train Energy: 0.1030 | Train Loss (BCE): 0.6454 | Train Acc: 0.6276 | Val Acc: 0.6185
+Epoch 003/20 | Train Energy: 0.0999 | Train Loss (BCE): 0.6362 | Train Acc: 0.6368 | Val Acc: 0.6320
+Epoch 004/20 | Train Energy: 0.0981 | Train Loss (BCE): 0.6308 | Train Acc: 0.6395 | Val Acc: 0.6346
+Epoch 005/20 | Train Energy: 0.0969 | Train Loss (BCE): 0.6273 | Train Acc: 0.6432 | Val Acc: 0.6357
+Epoch 006/20 | Train Energy: 0.0958 | Train Loss (BCE): 0.6248 | Train Acc: 0.6456 | Val Acc: 0.6357
+Epoch 007/20 | Train Energy: 0.0949 | Train Loss (BCE): 0.6229 | Train Acc: 0.6468 | Val Acc: 0.6412
+Epoch 008/20 | Train Energy: 0.0941 | Train Loss (BCE): 0.6214 | Train Acc: 0.6479 | Val Acc: 0.6395
+Epoch 009/20 | Train Energy: 0.0934 | Train Loss (BCE): 0.6202 | Train Acc: 0.6490 | Val Acc: 0.6402
+Epoch 010/20 | Train Energy: 0.0926 | Train Loss (BCE): 0.6191 | Train Acc: 0.6498 | Val Acc: 0.6402
+Epoch 011/20 | Train Energy: 0.0919 | Train Loss (BCE): 0.6182 | Train Acc: 0.6507 | Val Acc: 0.6417
+Epoch 012/20 | Train Energy: 0.0912 | Train Loss (BCE): 0.6174 | Train Acc: 0.6516 | Val Acc: 0.6436
+Epoch 013/20 | Train Energy: 0.0905 | Train Loss (BCE): 0.6167 | Train Acc: 0.6529 | Val Acc: 0.6423
+Epoch 014/20 | Train Energy: 0.0897 | Train Loss (BCE): 0.6161 | Train Acc: 0.6535 | Val Acc: 0.6440
+Epoch 015/20 | Train Energy: 0.0890 | Train Loss (BCE): 0.6155 | Train Acc: 0.6545 | Val Acc: 0.6455
+Epoch 016/20 | Train Energy: 0.0883 | Train Loss (BCE): 0.6149 | Train Acc: 0.6552 | Val Acc: 0.6470
+Epoch 017/20 | Train Energy: 0.0876 | Train Loss (BCE): 0.6145 | Train Acc: 0.6557 | Val Acc: 0.6483
+Epoch 018/20 | Train Energy: 0.0868 | Train Loss (BCE): 0.6141 | Train Acc: 0.6569 | Val Acc: 0.6500
+Epoch 019/20 | Train Energy: 0.0861 | Train Loss (BCE): 0.6137 | Train Acc: 0.6570 | Val Acc: 0.6513
+Epoch 020/20 | Train Energy: 0.0853 | Train Loss (BCE): 0.6133 | Train Acc: 0.6575 | Val Acc: 0.6509
+================================================================================
+Best Val Acc: 0.6513 at epoch 19
