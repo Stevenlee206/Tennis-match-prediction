@@ -32,7 +32,7 @@ def create_target(df: pd.DataFrame, random_state: int = 42) -> pd.DataFrame:
     # =========================
     # 2. ELO + GLICKO2 + form diffs — đã là winner - loser, chỉ cần đảo dấu
     # =========================
-    elo_form_cols = [
+    rate_cols = [
         'elo_diff',
         'elo_hard_diff',
         'elo_clay_diff',
@@ -44,7 +44,7 @@ def create_target(df: pd.DataFrame, random_state: int = 42) -> pd.DataFrame:
         'form_diff',
     ]
 
-    for col in elo_form_cols:
+    for col in rate_cols:
         if col in data.columns:
             data[col] = data[col] * sign
 
@@ -55,6 +55,13 @@ def create_target(df: pd.DataFrame, random_state: int = 42) -> pd.DataFrame:
         p1_hand = np.where(p1_is_winner, data['winner_hand'], data['loser_hand'])
         p2_hand = np.where(p1_is_winner, data['loser_hand'],  data['winner_hand'])
         data['same_hand_flag'] = (p1_hand == p2_hand).astype(int)
+
+    # RD (for Glicko2)
+    if {'winner_rd', 'loser_rd'}.issubset(data.columns):
+        p1_rd = np.where(p1_is_winner, data['winner_rd'], data['loser_rd'])
+        p2_rd = np.where(p1_is_winner, data['loser_rd'],  data['winner_rd'])
+        data["p1_rd"] = p1_rd
+        data["p2_rd"] = p2_rd
 
     # =========================
     # 4. Target

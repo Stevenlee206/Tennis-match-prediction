@@ -15,5 +15,7 @@ IMPORTANCE_COLUMNS = [
 	'age_diff',
 	'height_diff',
 	'surface',
-	'tourney_level'
+	'tourney_level',
+    'p1_rd',
+    'p2_rd',
 ]

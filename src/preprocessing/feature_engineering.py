@@ -265,6 +265,8 @@ def build_glicko2_feature(
     records = {
         'winner_glicko2':      [],
         'loser_glicko2':       [],
+        'winner_rd':           [],
+        'loser_rd':            [],
         'glicko2_diff':        [],
         'glicko2_hard_diff':   [],
         'glicko2_clay_diff':   [],
@@ -282,6 +284,9 @@ def build_glicko2_feature(
         records['winner_glicko2'].append(rw_g.rating)
         records['loser_glicko2'].append(rl_g.rating)
         records['glicko2_diff'].append(rw_g.rating - rl_g.rating)
+
+        records['winner_rd'].append(rw_g.rd)
+        records['loser_rd'].append(rl_g.rd)
 
         for s in SURFACES:
             col = f'glicko2_{s.lower()}_diff'

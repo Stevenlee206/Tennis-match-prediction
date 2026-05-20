@@ -85,7 +85,7 @@ def volatility_update(phi: float, sigma: float, delta: float, v: float, tau: flo
 
     return math.exp(A / 2.0)
 
-def age_player_rd(player: PlayerState, current_date: pd.Timestamp, period_days: int = 7) -> None:
+def age_player_rd(player: PlayerState, current_date: pd.Timestamp, period_days: int = 1) -> None:
     """
     Increase RD for inactivity before the new rating period.
     For per-match updates on Jeff Sackmann ATP, we approximate inactivity using tourney_date.
