@@ -10,12 +10,16 @@ from pathlib import Path
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.model_selection import TimeSeriesSplit, ParameterGrid
-from sklearn.metrics import accuracy_score, log_loss
+from sklearn.metrics import accuracy_score
 from importlib import import_module
+
+import torch
+import torch.nn.functional as F
 
 # Re-use bias metric and weight generation from SVM logic
 from src.models.svm.svm_sklearn_optuna import generate_sample_weights
-from src.model.Predictive_Coding.pc_network import PredictiveCodingNetwork, PCNetworkConfig
+from src.model.Predictive_Coding.pc_network import PCNetworkConfig
+from src.model.Predictive_Coding.pc_network_torch import PredictiveCodingNetworkTorch
 from src.model.util.metrics import binary_classification_metrics
 
 def plot_optuna_history(study, save_path):
@@ -102,7 +106,18 @@ def train_pc_model_loop(model, X_t, y_t, X_v, y_v, weights_t, max_epochs=100, ba
     best_epoch = 0
     metrics_history = []
     
-    n_samples = X_t.shape[0]
+    device = getattr(model, "device", "cuda" if torch.cuda.is_available() else "cpu")
+
+    X_t_t = torch.tensor(X_t, device=device, dtype=torch.float32)
+    y_t_t = torch.tensor(y_t, device=device, dtype=torch.float32).view(-1)
+    X_v_t = torch.tensor(X_v, device=device, dtype=torch.float32)
+    y_v_t = torch.tensor(y_v, device=device, dtype=torch.float32).view(-1)
+
+    w_t = None
+    if weights_t is not None:
+        w_t = torch.tensor(weights_t, device=device, dtype=torch.float32).view(-1)
+
+    n_samples = X_t_t.shape[0]
     indices = np.arange(n_samples)
     
     for epoch in range(1, max_epochs + 1):
@@ -110,28 +125,29 @@ def train_pc_model_loop(model, X_t, y_t, X_v, y_v, weights_t, max_epochs=100, ba
         energies = []
         for start in range(0, n_samples, batch_size):
             batch_idx = indices[start:start + batch_size]
-            xb = X_t[batch_idx]
-            yb = y_t[batch_idx].reshape(-1, 1).astype(np.float32)
+            batch_idx_t = torch.tensor(batch_idx, device=device, dtype=torch.long)
+            xb = X_t_t.index_select(0, batch_idx_t)
+            yb = y_t_t.index_select(0, batch_idx_t).view(-1, 1)
             
             w_opt = None
             if weights_t is not None:
-                w_opt = weights_t[batch_idx]
+                w_opt = w_t.index_select(0, batch_idx_t)
             
             energy = model.train_on_batch(xb, yb, sample_weights=w_opt)
             energies.append(energy)
             
-        # Eval on val
-        val_probs = model.predict_proba(X_v)
-        val_preds = (val_probs >= 0.5).astype(int)
-        acc = accuracy_score(y_v, val_preds)
-        
-        # Eval on train (for extended logging)
-        train_probs = model.predict_proba(X_t)
-        train_preds = (train_probs >= 0.5).astype(int)
-        train_acc = accuracy_score(y_t, train_preds)
-        
-        # Using binary cross entropy (log_loss) to represent explicit train_loss
-        train_loss = log_loss(y_t, train_probs, labels=[0, 1])
+        # Eval on val (device)
+        val_probs_t = model.predict_proba_torch(X_v_t)
+        val_preds_t = (val_probs_t >= 0.5).to(torch.float32)
+        acc = float((val_preds_t == y_v_t).to(torch.float32).mean().item())
+
+        # Eval on train (device)
+        train_probs_t = model.predict_proba_torch(X_t_t)
+        train_preds_t = (train_probs_t >= 0.5).to(torch.float32)
+        train_acc = float((train_preds_t == y_t_t).to(torch.float32).mean().item())
+
+        # Explicit train loss (BCE)
+        train_loss = float(F.binary_cross_entropy(train_probs_t, y_t_t).item())
         
         avg_energy = np.mean(energies)
         metrics_history.append({
@@ -191,7 +207,8 @@ def objective(trial, X_train, y_train, X_val, y_val, add_pca=False, validation="
         
         pc_cfg = PCNetworkConfig(**cfg_params)
         layer_sizes = [X_t_scaled.shape[1], *hidden_sizes, 1]
-        model = PredictiveCodingNetwork(layer_sizes=layer_sizes, cfg=pc_cfg)
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model = PredictiveCodingNetworkTorch(layer_sizes=layer_sizes, cfg=pc_cfg, device=device)
         
         best_acc, _, _, _, _ = train_pc_model_loop(model, X_t_scaled, y_t_np, X_v_scaled, y_v_np, weights, max_epochs=epochs, batch_size=batch_size, verbose=False)
         return best_acc
@@ -223,7 +240,8 @@ def objective(trial, X_train, y_train, X_val, y_val, add_pca=False, validation="
             
             pc_cfg = PCNetworkConfig(**cfg_params)
             layer_sizes = [X_t_scaled.shape[1], *hidden_sizes, 1]
-            model = PredictiveCodingNetwork(layer_sizes=layer_sizes, cfg=pc_cfg)
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            model = PredictiveCodingNetworkTorch(layer_sizes=layer_sizes, cfg=pc_cfg, device=device)
             
             y_t_np = y_t_cv.values.astype(np.float32)
             y_v_np = y_v_cv.values.astype(np.float32)
@@ -320,7 +338,8 @@ def run_pc_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
     hidden_sizes = [width] * depth
     layer_sizes = [X_t_scaled.shape[1], *hidden_sizes, 1]
     
-    model = PredictiveCodingNetwork(layer_sizes=layer_sizes, cfg=pc_cfg)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = PredictiveCodingNetworkTorch(layer_sizes=layer_sizes, cfg=pc_cfg, device=device)
     
     epochs = best_params['epochs']
     batch_size = best_params['batch_size']

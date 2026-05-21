@@ -1,0 +1,55 @@
+Predictive Coding Final Training Log
+Hyperparameters: epochs=50, batch_size=512, lr=0.0774
+================================================================================
+Epoch 001/50 | Train Energy: 0.1164 | Train Loss (BCE): 0.6508 | Train Acc: 0.6157 | Val Acc: 0.6067
+Epoch 002/50 | Train Energy: 0.1025 | Train Loss (BCE): 0.6299 | Train Acc: 0.6413 | Val Acc: 0.6322
+Epoch 003/50 | Train Energy: 0.1000 | Train Loss (BCE): 0.6235 | Train Acc: 0.6482 | Val Acc: 0.6380
+Epoch 004/50 | Train Energy: 0.0989 | Train Loss (BCE): 0.6204 | Train Acc: 0.6513 | Val Acc: 0.6412
+Epoch 005/50 | Train Energy: 0.0982 | Train Loss (BCE): 0.6185 | Train Acc: 0.6529 | Val Acc: 0.6429
+Epoch 006/50 | Train Energy: 0.0976 | Train Loss (BCE): 0.6171 | Train Acc: 0.6543 | Val Acc: 0.6449
+Epoch 007/50 | Train Energy: 0.0971 | Train Loss (BCE): 0.6160 | Train Acc: 0.6558 | Val Acc: 0.6466
+Epoch 008/50 | Train Energy: 0.0966 | Train Loss (BCE): 0.6151 | Train Acc: 0.6563 | Val Acc: 0.6487
+Epoch 009/50 | Train Energy: 0.0961 | Train Loss (BCE): 0.6143 | Train Acc: 0.6572 | Val Acc: 0.6517
+Epoch 010/50 | Train Energy: 0.0957 | Train Loss (BCE): 0.6137 | Train Acc: 0.6578 | Val Acc: 0.6535
+Epoch 011/50 | Train Energy: 0.0952 | Train Loss (BCE): 0.6131 | Train Acc: 0.6582 | Val Acc: 0.6526
+Epoch 012/50 | Train Energy: 0.0947 | Train Loss (BCE): 0.6126 | Train Acc: 0.6589 | Val Acc: 0.6541
+Epoch 013/50 | Train Energy: 0.0943 | Train Loss (BCE): 0.6122 | Train Acc: 0.6593 | Val Acc: 0.6535
+Epoch 014/50 | Train Energy: 0.0938 | Train Loss (BCE): 0.6118 | Train Acc: 0.6600 | Val Acc: 0.6550
+Epoch 015/50 | Train Energy: 0.0933 | Train Loss (BCE): 0.6115 | Train Acc: 0.6605 | Val Acc: 0.6558
+Epoch 016/50 | Train Energy: 0.0928 | Train Loss (BCE): 0.6112 | Train Acc: 0.6610 | Val Acc: 0.6560
+Epoch 017/50 | Train Energy: 0.0923 | Train Loss (BCE): 0.6110 | Train Acc: 0.6615 | Val Acc: 0.6569
+Epoch 018/50 | Train Energy: 0.0918 | Train Loss (BCE): 0.6107 | Train Acc: 0.6617 | Val Acc: 0.6573
+Epoch 019/50 | Train Energy: 0.0912 | Train Loss (BCE): 0.6105 | Train Acc: 0.6618 | Val Acc: 0.6558
+Epoch 020/50 | Train Energy: 0.0907 | Train Loss (BCE): 0.6104 | Train Acc: 0.6621 | Val Acc: 0.6580
+Epoch 021/50 | Train Energy: 0.0901 | Train Loss (BCE): 0.6102 | Train Acc: 0.6619 | Val Acc: 0.6577
+Epoch 022/50 | Train Energy: 0.0896 | Train Loss (BCE): 0.6101 | Train Acc: 0.6620 | Val Acc: 0.6588
+Epoch 023/50 | Train Energy: 0.0890 | Train Loss (BCE): 0.6100 | Train Acc: 0.6615 | Val Acc: 0.6573
+Epoch 024/50 | Train Energy: 0.0884 | Train Loss (BCE): 0.6099 | Train Acc: 0.6617 | Val Acc: 0.6590
+Epoch 025/50 | Train Energy: 0.0878 | Train Loss (BCE): 0.6098 | Train Acc: 0.6619 | Val Acc: 0.6575
+Epoch 026/50 | Train Energy: 0.0871 | Train Loss (BCE): 0.6097 | Train Acc: 0.6621 | Val Acc: 0.6575
+Epoch 027/50 | Train Energy: 0.0865 | Train Loss (BCE): 0.6097 | Train Acc: 0.6623 | Val Acc: 0.6565
+Epoch 028/50 | Train Energy: 0.0859 | Train Loss (BCE): 0.6096 | Train Acc: 0.6624 | Val Acc: 0.6575
+Epoch 029/50 | Train Energy: 0.0852 | Train Loss (BCE): 0.6096 | Train Acc: 0.6624 | Val Acc: 0.6558
+Epoch 030/50 | Train Energy: 0.0845 | Train Loss (BCE): 0.6096 | Train Acc: 0.6618 | Val Acc: 0.6562
+Epoch 031/50 | Train Energy: 0.0838 | Train Loss (BCE): 0.6096 | Train Acc: 0.6616 | Val Acc: 0.6539
+Epoch 032/50 | Train Energy: 0.0830 | Train Loss (BCE): 0.6095 | Train Acc: 0.6613 | Val Acc: 0.6541
+Epoch 033/50 | Train Energy: 0.0823 | Train Loss (BCE): 0.6096 | Train Acc: 0.6615 | Val Acc: 0.6532
+Epoch 034/50 | Train Energy: 0.0815 | Train Loss (BCE): 0.6096 | Train Acc: 0.6620 | Val Acc: 0.6530
+Epoch 035/50 | Train Energy: 0.0808 | Train Loss (BCE): 0.6096 | Train Acc: 0.6612 | Val Acc: 0.6532
+Epoch 036/50 | Train Energy: 0.0799 | Train Loss (BCE): 0.6097 | Train Acc: 0.6609 | Val Acc: 0.6539
+Epoch 037/50 | Train Energy: 0.0791 | Train Loss (BCE): 0.6097 | Train Acc: 0.6611 | Val Acc: 0.6541
+Epoch 038/50 | Train Energy: 0.0783 | Train Loss (BCE): 0.6098 | Train Acc: 0.6604 | Val Acc: 0.6543
+Epoch 039/50 | Train Energy: 0.0774 | Train Loss (BCE): 0.6098 | Train Acc: 0.6608 | Val Acc: 0.6539
+Epoch 040/50 | Train Energy: 0.0766 | Train Loss (BCE): 0.6099 | Train Acc: 0.6608 | Val Acc: 0.6539
+Epoch 041/50 | Train Energy: 0.0757 | Train Loss (BCE): 0.6099 | Train Acc: 0.6604 | Val Acc: 0.6545
+Epoch 042/50 | Train Energy: 0.0748 | Train Loss (BCE): 0.6100 | Train Acc: 0.6606 | Val Acc: 0.6539
+Epoch 043/50 | Train Energy: 0.0739 | Train Loss (BCE): 0.6101 | Train Acc: 0.6608 | Val Acc: 0.6526
+Epoch 044/50 | Train Energy: 0.0730 | Train Loss (BCE): 0.6102 | Train Acc: 0.6605 | Val Acc: 0.6520
+Epoch 045/50 | Train Energy: 0.0720 | Train Loss (BCE): 0.6102 | Train Acc: 0.6611 | Val Acc: 0.6526
+Epoch 046/50 | Train Energy: 0.0711 | Train Loss (BCE): 0.6102 | Train Acc: 0.6604 | Val Acc: 0.6515
+Epoch 047/50 | Train Energy: 0.0702 | Train Loss (BCE): 0.6104 | Train Acc: 0.6603 | Val Acc: 0.6498
+Epoch 048/50 | Train Energy: 0.0692 | Train Loss (BCE): 0.6105 | Train Acc: 0.6605 | Val Acc: 0.6505
+Epoch 049/50 | Train Energy: 0.0683 | Train Loss (BCE): 0.6106 | Train Acc: 0.6604 | Val Acc: 0.6494
+Epoch 050/50 | Train Energy: 0.0673 | Train Loss (BCE): 0.6108 | Train Acc: 0.6607 | Val Acc: 0.6507
+================================================================================
+Best Val Acc: 0.6590 at epoch 24

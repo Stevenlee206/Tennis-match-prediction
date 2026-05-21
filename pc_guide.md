@@ -94,3 +94,103 @@ python main.py --model predictive_coding --optimizer optuna --validation holdout
 ---
 
 _Mọi trọng số, Checkpoint, cấu hình tốt nhất sẽ được dump dưới hệ quy chiếu `/outputs/predictive_coding/` và các biểu đồ Importance / Loss Plot sẽ văng ra tại nhánh `/reports/figures/predictive_coding/`._
+
+---
+
+## NEW
+
+Dưới đây là “nhiều thể loại” lệnh kiểu bạn đưa (đều có `| tee ...log` để lưu log). Mình chia theo mục tiêu: debug nhanh, CV chuẩn, so sánh weight strategy, so sánh model, và chạy nặng tìm hyper tốt.
+
+## A) PC – WALK-FORWARD CV (TimeSeriesSplit) nhiều “phiên bản” khác nhau
+
+### A1) Baseline (không phạt upset)
+
+```bash
+!python main.py --model predictive_coding --optimizer optuna --validation walk_forward --n_trials 30 --epochs 20 --weight_strategy none --upset_weight 1.0 | tee pc_wf_none_t30_e20.log
+```
+
+### A2) Static upset penalty (phạt cố định)
+
+```bash
+!python main.py --model predictive_coding --optimizer optuna --validation walk_forward --n_trials 30 --epochs 20 --weight_strategy static --upset_weight 2.0 | tee pc_wf_static_w2_t30_e20.log
+!python main.py --model predictive_coding --optimizer optuna --validation walk_forward --n_trials 30 --epochs 20 --weight_strategy static --upset_weight 3.0 | tee pc_wf_static_w3_t30_e20.log
+```
+
+### A3) Magnitude (phạt theo độ chênh Elo)
+
+```bash
+!python main.py --model predictive_coding --optimizer optuna --validation walk_forward --n_trials 30 --epochs 20 --weight_strategy magnitude --upset_weight 2.0 | tee pc_wf_mag_w2_t30_e20.log
+!python main.py --model predictive_coding --optimizer optuna --validation walk_forward --n_trials 30 --epochs 20 --weight_strategy magnitude --upset_weight 3.0 | tee pc_wf_mag_w3_t30_e20.log
+```
+
+### A4) Temporal (phạt theo thời gian)
+
+```bash
+!python main.py --model predictive_coding --optimizer optuna --validation walk_forward --n_trials 30 --epochs 20 --weight_strategy temporal --upset_weight 2.0 | tee pc_wf_temp_w2_t30_e20.log
+```
+
+---
+
+## B) PC – Debug nhanh (đảm bảo pipeline chạy đúng) + log rõ
+
+### B1) CV nhanh (ít trial, ít epoch)
+
+```bash
+!python main.py --model predictive_coding --optimizer optuna --validation walk_forward --n_trials 5 --epochs 10 --weight_strategy magnitude --upset_weight 2.0 | tee pc_wf_quick_t5_e10.log
+```
+
+### B2) Holdout nhanh (để test flow + outputs/plots)
+
+```bash
+!python main.py --model predictive_coding --optimizer optuna --validation holdout --n_trials 5 --epochs 10 --weight_strategy magnitude --upset_weight 2.0 | tee pc_holdout_quick_t5_e10.log
+```
+
+---
+
+## C) PC – Chạy “nặng” để săn hyper tốt hơn (tốn thời gian)
+
+### C1) Nhiều trial hơn
+
+```bash
+!python main.py --model predictive_coding --optimizer optuna --validation walk_forward --n_trials 80 --epochs 20 --weight_strategy magnitude --upset_weight 2.0 | tee pc_wf_t80_e20.log
+```
+
+### C2) Epoch cao hơn (cẩn thận overfit, nhưng vẫn có best-epoch checkpoint)
+
+```bash
+!python main.py --model predictive_coding --optimizer optuna --validation walk_forward --n_trials 50 --epochs 50 --weight_strategy magnitude --upset_weight 2.0 | tee pc_wf_t50_e50.log
+```
+
+---
+
+## D) So sánh PC vs các model khác (cùng WALK-FORWARD CV)
+
+### D1) PC (Predictive Coding)
+
+```bash
+!python main.py --model predictive_coding --optimizer optuna --validation walk_forward --n_trials 30 --epochs 20 --weight_strategy magnitude --upset_weight 2.0 | tee cmp_pc_wf.log
+```
+
+### D2) PyTorch MLP (GPU)
+
+```bash
+!python main.py --model pytorch_mlp --optimizer optuna --validation walk_forward --n_trials 30 --epochs 20 --batch_size 256 --weight_strategy magnitude --upset_weight 2.0 | tee cmp_mlp_wf.log
+```
+
+### D3) PyTorch SVM (GPU/CPU)
+
+```bash
+!python main.py --model pytorch_svm --optimizer optuna --validation walk_forward --n_trials 30 --epochs 20 --batch_size 256 --weight_strategy magnitude --upset_weight 2.0 | tee cmp_psvm_wf.log
+```
+
+---
+
+# Câu hỏi: lệnh trên có chạy được PC NumPy không?
+
+Hiện tại: **Không** (theo code mình đã chuyển), vì pc_optuna.py đang import và dùng **`PredictiveCodingNetworkTorch`** nên nó sẽ chạy bằng PyTorch (và dùng GPU nếu có).
+
+- Nếu bạn muốn chạy **PC NumPy** song song (để so sánh CPU/NumPy vs GPU/Torch), mình có thể thêm 1 flag kiểu:
+    - `--pc_backend numpy|torch` (mặc định `torch`)
+    - Hoặc tách thành `--model predictive_coding_numpy` và `--model predictive_coding_torch`
+
+Bạn muốn cách nào? (mình khuyên `--pc_backend` để không nhân đôi nhiều code).
