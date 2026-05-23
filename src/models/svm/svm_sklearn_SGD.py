@@ -44,8 +44,7 @@ def generate_sample_weights(X_raw, y_raw, strategy="none", base_weight=1.0):
 # ==========================================
 # Optimization Objective
 # ==========================================
-def objective(trial, X_train, y_train, X_val, y_val, c_min=1e-3, c_max=1e2, add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0, lr_schedule="adaptive"):
-    
+def objective(trial, X_train, y_train, X_val, y_val, c_min=1e-3, c_max=1e2, add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0, lr_schedule="adaptive", n_splits=5, tscv_test_size=None):    
     c_param = trial.suggest_float("C", c_min, c_max, log=True)
     alpha_param = 1.0 / c_param 
     
@@ -92,7 +91,8 @@ def objective(trial, X_train, y_train, X_val, y_val, c_min=1e-3, c_max=1e2, add_
         return accuracy_score(y_val, val_preds)
 
     elif validation == "walk_forward":
-        tscv = TimeSeriesSplit(n_splits=5)
+        # ---> UPDATED HERE <---
+        tscv = TimeSeriesSplit(n_splits=n_splits, test_size=tscv_test_size)
         fold_accuracies = []
         
         for train_index, val_index in tscv.split(X_train):
@@ -154,8 +154,7 @@ def plot_feature_importance(clf, feature_names, save_path):
 # ==========================================
 # Main Execution Pipeline
 # ==========================================
-def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_trials=30, n_epochs=100, kernel="linear", c_min=1e-3, c_max=1e2, add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0, lr_schedule="adaptive"):
-    
+def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_trials=30, n_epochs=100, kernel="linear", c_min=1e-3, c_max=1e2, add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0, lr_schedule="adaptive", n_splits=5, tscv_test_size=None):    
     if kernel != "linear":
         raise ValueError("SGDClassifier requires a linear kernel. Terminating.")    
     
@@ -206,7 +205,7 @@ def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_
         direction="maximize"
     )
     
-    study.optimize(lambda trial: objective(trial, X_train, y_train, X_val, y_val, c_min, c_max, add_pca, validation, weight_strategy, upset_weight, lr_schedule), n_trials=n_trials)
+    study.optimize(lambda trial: objective(trial, X_train, y_train, X_val, y_val, c_min, c_max, add_pca, validation, weight_strategy, upset_weight, lr_schedule, n_splits, tscv_test_size), n_trials=n_trials)
         
     best_params = study.best_params
     best_alpha = 1.0 / best_params["C"]

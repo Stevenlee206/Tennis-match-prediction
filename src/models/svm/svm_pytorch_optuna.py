@@ -180,7 +180,8 @@ def train_and_evaluate(X_train, y_train, X_val, y_val, params, epochs=50, batch_
         scheduler = ConstantLR(optimizer, factor=1.0) 
 
     best_val_acc = 0.0
-    best_model_weights = copy.deepcopy(model.state_dict()) # Track best weights
+    best_epoch = epochs  # <--- ADDED: Default to max epochs
+    best_model_weights = copy.deepcopy(model.state_dict())
     history = {'train_loss': [], 'train_acc': [], 'val_acc': []}
     
     for epoch in range(epochs):
@@ -214,7 +215,7 @@ def train_and_evaluate(X_train, y_train, X_val, y_val, params, epochs=50, batch_
                 
                 if val_acc > best_val_acc:
                     best_val_acc = val_acc
-                    # SAVE the weights when accuracy improves!
+                    best_epoch = epoch + 1 # <--- ADDED: Track the 1-indexed epoch
                     best_model_weights = copy.deepcopy(model.state_dict())
                 
                 if track_history:
@@ -222,7 +223,6 @@ def train_and_evaluate(X_train, y_train, X_val, y_val, params, epochs=50, batch_
             else:
                 val_acc = 0.0
                 
-        # Step the scheduler
         if sched_choice == "plateau":
             scheduler.step(val_acc)
         else:
@@ -231,14 +231,18 @@ def train_and_evaluate(X_train, y_train, X_val, y_val, params, epochs=50, batch_
     if has_val:
         model.load_state_dict(best_model_weights)
 
+    # --- UPDATED: Return best_epoch alongside the other variables ---
     if track_history:
-        return best_val_acc, model, history
-    return best_val_acc, model
+        return best_val_acc, best_epoch, model, history
+    return best_val_acc, best_epoch, model
 
 # ==========================================
 # Optimization Objective
 # ==========================================
-def objective(trial, X_train_raw, y_train_raw, X_val_raw, y_val_raw, c_min, c_max, add_pca, validation, weight_strategy, upset_weight, torch_opt, torch_sched, epochs, batch_size, device):
+# ==========================================
+# Optimization Objective
+# ==========================================
+def objective(trial, X_train_raw, y_train_raw, X_val_raw, y_val_raw, c_min, c_max, add_pca, validation, weight_strategy, upset_weight, torch_opt, torch_sched, epochs, batch_size, device, n_splits=5, tscv_test_size=None):
     trial_seed = 42 + trial.number
     set_seed(trial_seed)
     
@@ -265,12 +269,14 @@ def objective(trial, X_train_raw, y_train_raw, X_val_raw, y_val_raw, c_min, c_ma
             
         params["train_weights"] = generate_sample_weights(X_train_raw, y_train_raw, weight_strategy, upset_weight)
         
-        best_val_acc, _ = train_and_evaluate(X_t_processed, y_train_raw, X_v_processed, y_val_raw, params, epochs, batch_size, device, track_history=False)
+        best_val_acc, best_epoch, _ = train_and_evaluate(X_t_processed, y_train_raw, X_v_processed, y_val_raw, params, epochs, batch_size, device, track_history=False)
+        trial.set_user_attr("best_epoch", best_epoch)
         return best_val_acc
 
     elif validation == "walk_forward":
-        tscv = TimeSeriesSplit(n_splits=5)
+        tscv = TimeSeriesSplit(n_splits=n_splits, test_size=tscv_test_size)
         fold_accuracies = []
+        fold_best_epochs = []
         
         for train_index, val_index in tscv.split(X_train_raw):
             X_t_cv, X_v_cv = X_train_raw.iloc[train_index], X_train_raw.iloc[val_index]
@@ -289,15 +295,20 @@ def objective(trial, X_train_raw, y_train_raw, X_val_raw, y_val_raw, c_min, c_ma
                 
             params["train_weights"] = generate_sample_weights(X_t_cv, y_t_cv, weight_strategy, upset_weight)
             
-            fold_acc, _ = train_and_evaluate(X_t_processed, y_t_cv, X_v_processed, y_v_cv, params, epochs, batch_size, device, track_history=False)
-            fold_accuracies.append(fold_acc)
+            fold_acc, best_epoch, _ = train_and_evaluate(X_t_processed, y_t_cv, X_v_processed, y_v_cv, params, epochs, batch_size, device, track_history=False)
             
+            fold_accuracies.append(fold_acc)
+            fold_best_epochs.append(best_epoch) 
+            
+        optimal_epoch = int(np.median(fold_best_epochs))
+        trial.set_user_attr("best_epoch", optimal_epoch)
+        
         return np.mean(fold_accuracies)
 
 # ==========================================
 # Main Execution Pipeline
 # ==========================================
-def run_pytorch_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_trials=30, epochs=100, batch_size=64, c_min=1e-3, c_max=1e2, add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0, torch_opt="adam", torch_sched="cosine"):
+def run_pytorch_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_trials=30, epochs=100, batch_size=64, c_min=1e-3, c_max=1e2, add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0, torch_opt="adam", torch_sched="cosine", n_splits=5, tscv_test_size=None):    
     set_seed(42)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Executing PyTorch Pipeline on: {device.upper()}")
@@ -325,18 +336,19 @@ def run_pytorch_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir
         direction="maximize"
     )
     
-    study.optimize(lambda trial: objective(trial, X_train, y_train, X_val, y_val, c_min, c_max, add_pca, validation, weight_strategy, upset_weight, torch_opt, torch_sched, epochs, batch_size, device), n_trials=n_trials)
-        
+    study.optimize(lambda trial: objective(trial, X_train, y_train, X_val, y_val, c_min, c_max, add_pca, validation, weight_strategy, upset_weight, torch_opt, torch_sched, epochs, batch_size, device, n_splits, tscv_test_size), n_trials=n_trials)
     best_params = study.best_params
     best_params["optimizer"] = torch_opt
     best_params["scheduler"] = torch_sched
-    print(f"\nBest Optuna parameters: {best_params}")
     
-    # --- ADD THIS ---
-    # Retrieve the exact random state used by the best trial
+    # --- ADDED: Retrieve the exact epoch to stop at ---
     best_seed = study.best_trial.user_attrs["seed"]
+    best_epoch_to_use = study.best_trial.user_attrs["best_epoch"] 
+    
     set_seed(best_seed)
     
+    print(f"\nBest Optuna parameters: {best_params}")
+    print(f"Optimal Epochs (Early Stopping): {best_epoch_to_use}") # <--- LOG IT    
     # --- Final Training on Best Params ---
     print("Training final PyTorch model and generating learning curves...")
     scaler = StandardScaler()
@@ -368,9 +380,9 @@ def run_pytorch_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir
     best_params["train_weights"] = generate_sample_weights(X_train, y_train, weight_strategy, upset_weight)
     
     # Call training with track_history=True
-    _, final_model, history = train_and_evaluate(
+    _, _, final_model, history = train_and_evaluate(
         X_train_processed, y_train, X_val_processed, eval_y, 
-        best_params, epochs, batch_size, device, track_history=True
+        best_params, epochs=best_epoch_to_use, batch_size=batch_size, device=device, track_history=True
     )
     
     # Overfitting Check

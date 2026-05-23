@@ -17,6 +17,9 @@ from sklearn.metrics import accuracy_score
 # ==========================================
 # Plotting Utilities
 # ==========================================
+np.int = int      
+np.float = float  
+np.bool = bool    
 def plot_optuna_history(study, save_path):
     plt.figure(figsize=(10, 6))
     trials = study.trials_dataframe()
@@ -83,8 +86,7 @@ def generate_sample_weights(X_raw, y_raw, strategy="none", base_weight=1.0):
 # ==========================================
 # Optimization Objective
 # ==========================================
-def objective(trial, X_train, y_train, X_val, y_val, bounds, add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0):
-    
+def objective(trial, X_train, y_train, X_val, y_val, bounds, add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0, n_splits=3, tscv_test_size=None):    
     # Deep Forest Hyperparameters using dynamic bounds from CLI
     params = {
         "n_bins": trial.suggest_int("n_bins", 128, 255),
@@ -124,7 +126,8 @@ def objective(trial, X_train, y_train, X_val, y_val, bounds, add_pca=False, vali
     # STRATEGY 2: WALK-FORWARD (TSCV)
     # ==========================================
     elif validation == "walk_forward":
-        tscv = TimeSeriesSplit(n_splits=5)
+        # ---> UPDATED HERE <---
+        tscv = TimeSeriesSplit(n_splits=n_splits, test_size=tscv_test_size)
         fold_accuracies = []
         
         for train_index, val_index in tscv.split(X_train):
@@ -156,7 +159,7 @@ def objective(trial, X_train, y_train, X_val, y_val, bounds, add_pca=False, vali
 # Main Execution Pipeline
 # ==========================================
 def run_deepforest_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_trials=30, add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0, 
-                            max_layers_min=2, max_layers_max=8, n_trees_min=50, n_trees_max=200, max_depth_min=5, max_depth_max=30):
+                            max_layers_min=2, max_layers_max=8, n_trees_min=50, n_trees_max=200, max_depth_min=5, max_depth_max=30, n_splits=3, tscv_test_size=None):
     
     output_dir = Path(output_dir)
     reports_dir = Path(reports_dir)
@@ -200,7 +203,7 @@ def run_deepforest_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_
         direction="maximize"
     )
     
-    study.optimize(lambda trial: objective(trial, X_train, y_train, X_val, y_val, bounds, add_pca, validation, weight_strategy, upset_weight), n_trials=n_trials)
+    study.optimize(lambda trial: objective(trial, X_train, y_train, X_val, y_val, bounds, add_pca, validation, weight_strategy, upset_weight, n_splits, tscv_test_size), n_trials=n_trials)
         
     best_params = study.best_params
     print(f"\nBest Optuna parameters: {best_params}")
