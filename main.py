@@ -75,9 +75,9 @@ def main():
     parser = argparse.ArgumentParser(description="ATP Tennis Match Prediction Pipeline")
     
     # --- ADDED SPLIT & TSCV CONFIG FLAGS ---
-    parser.add_argument("--test_size", type=float, default=0.20, help="Global test set ratio")
+    parser.add_argument("--test_size", type=float, default=0.10, help="Global test set ratio")
     parser.add_argument("--val_size", type=float, default=0.20, help="Validation set ratio (for holdout)")
-    parser.add_argument("--n_splits", type=int, default=3, help="Number of TimeSeries CV splits for walk-forward")
+    parser.add_argument("--n_splits", type=int, default=5, help="Number of TimeSeries CV splits for walk-forward")
     
     parser.add_argument("--model", type=str, choices=["svm", "rf", "pytorch_svm", "tabnet", "deepforest", "pytorch_mlp"], default="svm", help="Algorithm to use")    
     parser.add_argument("--torch_opt", type=str, choices=["adam", "rmsprop", "sgd", "sgd_nesterov"], default="adam", help="Optimizer for PyTorch SVM")
