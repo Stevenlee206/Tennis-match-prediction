@@ -32,3 +32,8 @@ class Preprocessing:
 		data = remove_unused_data(data)
 		data = feature_selection(data)
 		return data
+	
+if __name__ == '__main__':
+	preprocessing = Preprocessing()
+	data = preprocessing.run()
+	data.to_csv('data/processed/final_ml_matrix.csv', index=False)
