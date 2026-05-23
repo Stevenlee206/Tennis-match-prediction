@@ -1,0 +1,14 @@
+{
+    "class_1_prediction_rate": 51.13,
+    "elo_reliance": 87.76,
+    "elo_baseline_accuracy": 64.09,
+    "upset_prediction_accuracy": 17.29,
+    "rank_reliance": 85.15,
+    "final_accuracy": 64.27,
+    "precision_class_0": 64.35,
+    "recall_class_0": 63.2,
+    "f1_class_0": 63.77,
+    "precision_class_1": 64.19,
+    "recall_class_1": 65.32,
+    "f1_class_1": 64.75
+}

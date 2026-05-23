@@ -1,0 +1,39 @@
+======================================================================
+PREDICTIVE CODING - FINAL TEST EVALUATION
+Date: 2026-05-23 11:29:51
+Source Training: global_tscv_predictive_coding
+======================================================================
+
+TRAINING INFO:
+  - Epochs: 100
+  - Batch Size: 128
+  - Best Epoch: 18
+  - Training Time: 59.7s
+
+TEST METRICS:
+
+==================================================
+ MODEL BIAS & HEURISTIC ANALYSIS
+==================================================
+CLASSIFICATION REPORT:
+              precision    recall  f1-score   support
+
+         0.0       0.64      0.64      0.64      2902
+         1.0       0.65      0.65      0.65      2930
+
+    accuracy                           0.65      5832
+   macro avg       0.65      0.65      0.65      5832
+weighted avg       0.65      0.65      0.65      5832
+
+--------------------------------------------------
+Class 1 Prediction Rate:   50.75% (Ideal: ~50.0%)
+Elo Reliance (Safe Bet):   88.79%
+Blind Elo Baseline Acc:    64.09%
+Upset Prediction Accuracy: 16.19% (Correctly guessing the underdog)
+Rank Reliance Bias:        86.25%
+
+Final Set Accuracy:        64.51%
+==================================================
+
+
+======================================================================

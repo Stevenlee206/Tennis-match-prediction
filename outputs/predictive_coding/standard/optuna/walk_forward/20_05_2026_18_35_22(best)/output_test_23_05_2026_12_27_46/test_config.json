@@ -1,0 +1,69 @@
+{
+    "model_type": "PredictiveCoding_TEST",
+    "source_train_dir": "outputs\\predictive_coding\\standard\\optuna\\walk_forward\\20_05_2026_18_35_22(best)\\global_tscv_predictive_coding",
+    "best_params": {
+        "learning_rate": 0.08888154503571266,
+        "inference_lr": 0.0011684325782101933,
+        "inference_steps": 5,
+        "hidden_activation": "tanh",
+        "random_seed": 42
+    },
+    "model_params": {
+        "depth": 1,
+        "width": 128,
+        "epochs": 100,
+        "batch_size": 128,
+        "hidden_sizes": [
+            128
+        ]
+    },
+    "architecture": {
+        "input_dim": 38,
+        "hidden_layers": 1,
+        "width_per_layer": 128,
+        "hidden_sizes": [
+            128
+        ],
+        "full_layer_sizes": [
+            38,
+            128,
+            1
+        ],
+        "output_dim": 1
+    },
+    "test_metrics": {
+        "accuracy": 0.6450617283950617,
+        "balanced_accuracy": 0.6450288491166503,
+        "precision": 0.6452702702702703,
+        "recall": 0.6518771331058021,
+        "f1": 0.6485568760611206,
+        "roc_auc": 0.711151483148023,
+        "pr_auc": 0.7045012235969004,
+        "log_loss": 0.6208326711729969,
+        "brier": 0.2162673847307106,
+        "class_1_prediction_rate": 50.75,
+        "elo_reliance": 88.79,
+        "elo_baseline_accuracy": 64.09,
+        "upset_prediction_accuracy": 16.19,
+        "rank_reliance": 86.25,
+        "final_accuracy": 64.51,
+        "precision_class_0": 0.6448,
+        "recall_class_0": 0.6382,
+        "f1_class_0": 0.6415,
+        "precision_class_1": 0.6453,
+        "recall_class_1": 0.6519,
+        "f1_class_1": 0.6486
+    },
+    "training_info": {
+        "epochs_trained": 100,
+        "batch_size": 128,
+        "best_epoch": 18,
+        "training_time_seconds": 59.2659051999799,
+        "total_time_seconds": 59.266087900003185
+    },
+    "data_info": {
+        "train_pool_size": 46659,
+        "test_size": 5832,
+        "n_features": 38
+    }
+}
