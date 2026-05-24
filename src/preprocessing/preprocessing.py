@@ -31,20 +31,20 @@ class Preprocessing:
         self.data = pd.concat(dfs, axis=0, ignore_index=True)
         return self.data
     
-    def run(self):
+    def run(self, train_ratio=0.8):
         data = self._load()
         
         # 1. IMPORTANT: Drop missing stats early so the dataset length stabilizes
         stat_cols = [c for c in data.columns if c.startswith(('w_', 'l_'))]
-        data = data.dropna(subset=stat_cols)
+        data = data.dropna(subset=stat_cols).copy()
 
         # 2. Sort chronologically to mirror main.py's `shuffle=False`
         if 'tourney_date' in data.columns:
             data['tourney_date'] = pd.to_datetime(data['tourney_date'], format='%Y%m%d', errors='coerce')
         data = data.sort_values('tourney_date').reset_index(drop=True)
         
-        # 3. Calculate the Train Split Threshold (matches main.py exactly)
-        train_split_idx = int(len(data) * 0.8)
+        # 3. Calculate the Train Split Threshold dynamically
+        train_split_idx = int(len(data) * train_ratio)
         
         # Pass the train_split_idx to leaky functions (Fit on Train, Apply to All)
         data = drop_high_missing_columns(data, train_split_idx, threshold=CLEAN_THRESHOLD)
@@ -66,14 +66,14 @@ class Preprocessing:
         data = remove_unused_data(data)
         data = encode_categorical_features(data)
         
-        current_train_idx = int(len(data) * 0.8)
+        current_train_idx = int(len(data) * train_ratio)
         
         # Pass the NEW index to correlation selector
         data = feature_selection(data, current_train_idx, k=40) 
         
         nan_cols = data.columns[data.isna().any()].tolist()
         if nan_cols:
-            print(f"\n⚠️ WARNING: Sneaky NaNs detected in columns: {nan_cols}")
+            print(f"\nWARNING: Sneaky NaNs detected in columns: {nan_cols}")
             print("Applying safety net imputation (filling with 0) so Optuna doesn't crash...")
             
             # Since most of your final features are target-encoded differences (e.g., elo_diff, rank_diff),

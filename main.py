@@ -8,12 +8,12 @@ import numpy as np
 from sklearn.metrics import accuracy_score, classification_report
 from datetime import datetime
 
-def evaluate_model_bias(y_true, y_pred, X_raw):
+def evaluate_model_bias(y_true, y_pred, X_raw, dataset_name=""):
     """
     Calculates bias metrics and returns them as a dictionary for JSON logging.
     """
     print("\n" + "="*50)
-    print(" MODEL BIAS & HEURISTIC ANALYSIS")
+    print(f" MODEL BIAS & HEURISTIC ANALYSIS {dataset_name}")
     print("="*50)
 
     print("CLASSIFICATION REPORT:")
@@ -90,6 +90,9 @@ def main():
     parser.add_argument("--lr_schedule", type=str, choices=["adaptive", "optimal", "invscaling", "constant"], default="adaptive", help="Learning rate schedule for SGD mode.")
     
     # Optimizer Params
+    parser.add_argument("--test_size", type=float, default=0.10, help="Global test set ratio")
+    parser.add_argument("--val_size", type=float, default=0.20, help="Validation set ratio (for holdout)")
+    parser.add_argument("--n_splits", type=int, default=5, help="Number of TimeSeries CV splits for walk-forward")
     parser.add_argument("--n_trials", type=int, default=30, help="Used for Optuna")
     parser.add_argument("--particles", type=int, default=15, help="Used for PSO")
     parser.add_argument("--iterations", type=int, default=20, help="Used for PSO")
@@ -133,8 +136,29 @@ def main():
     print("==============================================\n")
 
     print("--- Step 1: Preprocessing Data ---")
+    precomputed_folds = None
+    if args.validation == "walk_forward" and args.model == "predictive_coding":
+        print(f"Pre-computing {args.n_splits} folds to prevent Data Leakage...")
+        train_ratios = [0.4, 0.5, 0.6, 0.7, 0.8]
+        val_ratios = [0.5, 0.6, 0.7, 0.8, 0.9]
+        precomputed_folds = []
+        for t_ratio, v_ratio in zip(train_ratios, val_ratios):
+            prep_fold = Preprocessing()
+            data_fold = prep_fold.run(train_ratio=t_ratio)
+            idx_train = int(len(data_fold) * t_ratio)
+            idx_val = int(len(data_fold) * v_ratio)
+            
+            train_df = data_fold.iloc[:idx_train].copy()
+            val_df = data_fold.iloc[idx_train:idx_val].copy()
+            
+            precomputed_folds.append((train_df, val_df))
+        
+        train_ratio_final = 1.0 - args.test_size
+    else:
+        train_ratio_final = (1.0 - args.test_size) * (1.0 - args.val_size) if args.validation == "holdout" else (1.0 - args.test_size)
+        
     prep = Preprocessing()
-    data = prep.run()
+    data = prep.run(train_ratio=train_ratio_final)
     
     if 'target' not in data.columns:
         raise ValueError("Error: 'target' missing.")
@@ -146,7 +170,7 @@ def main():
     y_full = data['target']
 
     X_train_val_pool, X_test, y_train_val_pool, y_test = train_test_split(
-        X_full, y_full, test_size=0.20, shuffle=False
+        X_full, y_full, test_size=args.test_size, shuffle=False
     )
     
     # --- CLEANUP GLOBAL TEST SET ---
@@ -449,7 +473,8 @@ def main():
         elif args.model == "predictive_coding":
             run_pipeline(X_train_val_pool, y_train_val_pool, None, None, global_out, global_rep, 
                          n_trials=args.n_trials, validation=args.validation, optimizer=args.optimizer,
-                         weight_strategy=args.weight_strategy, upset_weight=args.upset_weight)
+                         weight_strategy=args.weight_strategy, upset_weight=args.upset_weight,
+                         precomputed_folds=precomputed_folds)
 
         elif args.model == "rf":
             run_pipeline(X_train_val_pool, y_train_val_pool, None, None, global_out, global_rep, 
@@ -458,8 +483,49 @@ def main():
                           add_pca=args.add_pca, validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight)       
 
         # ==========================================
-        # RUN BIAS EVALUATION ON LATEST MATCHES (VAL CHUNK)
+        # RUN BIAS EVALUATION ON LATEST MATCHES OR UNSEEN 10% TEST
         # ==========================================
+        if args.model == "predictive_coding":
+            print("\n" + "="*50)
+            print(" FINAL EVALUATION ON UNSEEN TEST SET (90-10)")
+            print("="*50)
+            model_name, scaler_name, config_name = "pc_model.npz", "pc_scaler.joblib", "pc_config.json"
+            model_path = global_out / model_name
+            scaler_path = global_out / scaler_name
+            config_path = global_out / config_name
+            
+            if model_path.exists() and scaler_path.exists():
+                scaler = joblib.load(scaler_path)
+                X_test_scaled = scaler.transform(X_test)
+                
+                from src.model.Predictive_Coding.pc_network import PredictiveCodingNetwork, PCNetworkConfig
+                with open(config_path, 'r') as f:
+                    cfg = json.load(f)
+                
+                pc_cfg = PCNetworkConfig(**cfg.get('best_params', {}))
+                layer_sizes = [X_test_scaled.shape[1], *cfg['model_params']['hidden_sizes'], 1]
+                best_model = PredictiveCodingNetwork(layer_sizes=layer_sizes, cfg=pc_cfg)
+                
+                state = dict(np.load(model_path))
+                best_model.load_state_dict(state)
+                probs = best_model.predict_proba(X_test_scaled)
+                y_pred_test = (probs >= 0.5).astype(int)
+                
+                bias_metrics = evaluate_model_bias(y_test.values, y_pred_test, X_test, dataset_name="(UNSEEN TEST SET)")
+                
+                from src.model.util.metrics import binary_classification_metrics
+                final_test_metrics = binary_classification_metrics(y_test.values, probs)
+                print("\nFINAL METRICS ON UNSEEN TEST SET:")
+                for k, v in final_test_metrics.items():
+                    print(f" - {k:>16}: {v:.4f}")
+                
+                bias_metrics.update(final_test_metrics)
+                append_metrics_to_config(config_path, {"final_test_eval": bias_metrics})
+            else:
+                print(f"Could not find saved PC models in {global_out} for evaluation.")
+            
+            return
+
         print("Loading saved model to evaluate bias on the most recent chronological Validation chunk...")
         
         if args.model == "svm":
@@ -544,7 +610,7 @@ def main():
                 y_pred_val = best_model.predict(X_val_scaled)
             
             # Evaluate and append
-            bias_metrics = evaluate_model_bias(y_val_chunk.values, y_pred_val, X_val_chunk)
+            bias_metrics = evaluate_model_bias(y_val_chunk.values, y_pred_val, X_val_chunk, dataset_name="(VALIDATION SET)")
             append_metrics_to_config(config_path, bias_metrics)
         else:
             print(f"Could not find saved models in {global_out} for evaluation.")

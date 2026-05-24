@@ -172,7 +172,7 @@ def train_pc_model_loop(model, X_t, y_t, X_v, y_v, weights_t, max_epochs=100, ba
         
     return best_acc, best_epoch, best_state, metrics_history, train_time
 
-def objective(trial, X_train, y_train, X_val, y_val, add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0):
+def objective(trial, X_train, y_train, X_val, y_val, add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0, precomputed_folds=None):
     # Hyperparams to tune
     cfg_params = {
         "learning_rate": trial.suggest_float("learning_rate", 1e-4, 1e-1, log=True),
@@ -214,12 +214,14 @@ def objective(trial, X_train, y_train, X_val, y_val, add_pca=False, validation="
         return best_acc
         
     elif validation == "walk_forward":
-        tscv = TimeSeriesSplit(n_splits=5)
         fold_accuracies = []
         
-        for train_index, val_index in tscv.split(X_train):
-            X_t_cv, X_v_cv = X_train.iloc[train_index], X_train.iloc[val_index]
-            y_t_cv, y_v_cv = y_train.iloc[train_index], y_train.iloc[val_index]
+        for train_df, val_df in precomputed_folds:
+            y_t_cv = train_df['target']
+            X_t_cv = train_df.drop(columns=['target', 'year'], errors='ignore')
+            
+            y_v_cv = val_df['target']
+            X_v_cv = val_df.drop(columns=['target', 'year'], errors='ignore')
             
             # Keep only non-augmented data for validation
             if 'is_augmented' in X_v_cv.columns:
@@ -253,7 +255,7 @@ def objective(trial, X_train, y_train, X_val, y_val, add_pca=False, validation="
 
 def run_pc_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, 
                     n_trials=30, validation="holdout", optimizer="optuna",
-                    weight_strategy="none", upset_weight=1.0):
+                    weight_strategy="none", upset_weight=1.0, precomputed_folds=None):
     output_dir = Path(output_dir)
     reports_dir = Path(reports_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -279,13 +281,13 @@ def run_pc_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
     print(f"Optimizing Hyperparams with {optimizer.upper()} for {n_trials} trials...")
     if optimizer == "optuna":
         study.optimize(
-            lambda trial: objective(trial, X_train, y_train, X_val, y_val, False, validation, weight_strategy, upset_weight),
+            lambda trial: objective(trial, X_train, y_train, X_val, y_val, False, validation, weight_strategy, upset_weight, precomputed_folds),
             n_trials=n_trials
         )
     else: 
         # Grid Search logic handled by optuna sampler setup mapping if needed, but for simplicity we rely on Optuna TPESampler.
         study.optimize(
-            lambda trial: objective(trial, X_train, y_train, X_val, y_val, False, validation, weight_strategy, upset_weight),
+            lambda trial: objective(trial, X_train, y_train, X_val, y_val, False, validation, weight_strategy, upset_weight, precomputed_folds),
             n_trials=n_trials
         )
         
@@ -398,11 +400,14 @@ def run_pc_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
     plot_feature_importance_permutation(model, X_v_scaled, y_v_np, X_v_clean.columns, reports_dir)
     plot_training_curve(metrics_hist, reports_dir)
     
-    from src.model.util.metrics import binary_classification_metrics
+    from src.model.util.metrics import binary_classification_metrics, evaluate_model_bias
     val_probs = model.predict_proba(X_v_scaled)
+    val_preds = (val_probs >= 0.5).astype(int)
     final_metrics = binary_classification_metrics(y_v_np, val_probs)
     print("\nFINAL METRICS ON EVAL SET (Best Epoch):")
     for k, v in final_metrics.items():
         print(f" - {k:>16}: {v:.4f}")
+        
+    evaluate_model_bias(y_v_np, val_preds, X_v_clean, dataset_name="(VALIDATION SET)")
     
     return model, scaler
