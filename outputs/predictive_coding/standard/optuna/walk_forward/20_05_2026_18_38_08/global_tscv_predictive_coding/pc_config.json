@@ -1,0 +1,74 @@
+{
+    "model_type": "PredictiveCoding",
+    "optimizer": "optuna",
+    "best_params": {
+        "learning_rate": 0.012858620872891803,
+        "inference_lr": 0.0793111118501885,
+        "inference_steps": 14,
+        "hidden_activation": "tanh",
+        "random_seed": 42
+    },
+    "model_params": {
+        "depth": 2,
+        "width": 128,
+        "epochs": 100,
+        "batch_size": 64,
+        "hidden_sizes": [
+            128,
+            128
+        ]
+    },
+    "evaluation": {
+        "best_epoch": 4,
+        "test_accuracy": 0.6686669588088989,
+        "training_time_seconds": 496.5026475019986
+    },
+    "features_used": [
+        "elo_diff",
+        "glicko2_diff",
+        "elo_hard_diff",
+        "glicko2_hard_diff",
+        "rank_points_diff",
+        "elo_clay_diff",
+        "glicko2_clay_diff",
+        "elo_grass_diff",
+        "glicko2_grass_diff",
+        "hand_win_pct_diff",
+        "rank_diff",
+        "first_won_diff",
+        "form_diff",
+        "second_won_diff",
+        "fatigue_diff",
+        "h2h_advantage_diff",
+        "clutch_diff",
+        "ace_vs_df_diff",
+        "height_diff",
+        "first_in_diff",
+        "age_diff",
+        "tourney_level_F",
+        "round_RR",
+        "month",
+        "day_of_year",
+        "month_cos",
+        "day_cos",
+        "tourney_level_A",
+        "day_sin",
+        "surface_Hard",
+        "month_sin",
+        "round_R32",
+        "surface_Clay",
+        "same_hand_flag",
+        "best_of",
+        "tourney_level_M",
+        "tourney_level_G",
+        "round_R16"
+    ],
+    "bias_metrics": {
+        "class_1_prediction_rate": 50.58,
+        "elo_reliance": 81.28,
+        "elo_baseline_accuracy": 64.06,
+        "upset_prediction_accuracy": 26.81,
+        "rank_reliance": 84.36,
+        "final_accuracy": 64.61
+    }
+}

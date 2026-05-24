@@ -1,0 +1,56 @@
+======================================================================
+PREDICTIVE CODING - FINAL TEST EVALUATION
+Date: 2026-05-24 09:58:34
+Source Training: global_tscv_predictive_coding
+======================================================================
+
+CONFIGURATION VERIFICATION:
+----------------------------------------------------------------------
+HYPERPARAMETERS (from Best Config):
+  - Learning Rate: 0.012859
+  - Inference LR: 0.079311
+  - Inference Steps: 14
+  - Hidden Activation: tanh
+
+NETWORK ARCHITECTURE (from Best Config):
+  - Depth (Hidden Layers): 2
+  - Width (Neurons/Layer): 128
+  - Full Layer Sizes: [38, 128, 128, 1]
+  - Input Features: 38
+  - Output: Binary (1 neuron)
+
+TRAINING CONFIG:
+  - Epochs: 100
+  - Batch Size: 64
+  - Weight Strategy: none
+  - Best Epoch Reached: 12
+  - Training Time: 3704.2s
+
+TEST METRICS:
+----------------------------------------------------------------------
+
+==================================================
+ MODEL BIAS & HEURISTIC ANALYSIS
+==================================================
+CLASSIFICATION REPORT:
+              precision    recall  f1-score   support
+
+         0.0       0.64      0.64      0.64      2902
+         1.0       0.65      0.65      0.65      2930
+
+    accuracy                           0.65      5832
+   macro avg       0.65      0.65      0.65      5832
+weighted avg       0.65      0.65      0.65      5832
+
+--------------------------------------------------
+Class 1 Prediction Rate:   50.55% (Ideal: ~50.0%)
+Elo Reliance (Safe Bet):   84.67%
+Blind Elo Baseline Acc:    64.09%
+Upset Prediction Accuracy: 21.97% (Correctly guessing the underdog)
+Rank Reliance Bias:        85.43%
+
+Final Set Accuracy:        64.54%
+==================================================
+
+
+======================================================================
