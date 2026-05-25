@@ -9,6 +9,7 @@ from pathlib import Path
 from sklearn.linear_model import SGDClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import accuracy_score
 
@@ -44,7 +45,7 @@ def generate_sample_weights(X_raw, y_raw, strategy="none", base_weight=1.0):
 # ==========================================
 # Optimization Objective
 # ==========================================
-def objective(trial, X_train, y_train, X_val, y_val, c_min=1e-3, c_max=1e2, add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0, lr_schedule="adaptive", n_splits=5, tscv_test_size=None):    
+def objective(trial, X_train, y_train, X_val, y_val, c_min=1e-3, c_max=1e2, add_pca=False, add_kmeans=False, n_clusters=5, validation="holdout", weight_strategy="none", upset_weight=1.0, lr_schedule="adaptive", n_splits=5, tscv_test_size=None):
     c_param = trial.suggest_float("C", c_min, c_max, log=True)
     alpha_param = 1.0 / c_param 
     
@@ -81,7 +82,12 @@ def objective(trial, X_train, y_train, X_val, y_val, c_min=1e-3, c_max=1e2, add_
             X_v_processed = pca.transform(X_v_scaled)
         else:
             X_t_processed, X_v_processed = X_t_scaled, X_v_scaled
-            
+        if add_kmeans:
+            kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto')
+            t_distances = kmeans.fit_transform(X_t_processed)
+            v_distances = kmeans.transform(X_v_processed)
+            X_t_processed = np.hstack((X_t_processed, t_distances))
+            X_v_processed = np.hstack((X_v_processed, v_distances))  
         weights = generate_sample_weights(X_train, y_train, weight_strategy, upset_weight)
         
         clf = SGDClassifier(**params)
@@ -109,7 +115,12 @@ def objective(trial, X_train, y_train, X_val, y_val, c_min=1e-3, c_max=1e2, add_
                 X_v_processed = pca.transform(X_v_scaled)
             else:
                 X_t_processed, X_v_processed = X_t_scaled, X_v_scaled
-                
+            if add_kmeans:
+                kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto')
+                t_distances = kmeans.fit_transform(X_t_processed)
+                v_distances = kmeans.transform(X_v_processed)
+                X_t_processed = np.hstack((X_t_processed, t_distances))
+                X_v_processed = np.hstack((X_v_processed, v_distances))    
             weights_cv = generate_sample_weights(X_t_cv, y_t_cv, weight_strategy, upset_weight)
             
             clf_cv = SGDClassifier(**params)
@@ -154,7 +165,7 @@ def plot_feature_importance(clf, feature_names, save_path):
 # ==========================================
 # Main Execution Pipeline
 # ==========================================
-def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_trials=30, n_epochs=100, kernel="linear", c_min=1e-3, c_max=1e2, add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0, lr_schedule="adaptive", n_splits=5, tscv_test_size=None):    
+def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_trials=30, n_epochs=100, kernel="linear", c_min=1e-3, c_max=1e2, add_pca=False, add_kmeans=False, n_clusters=5, validation="holdout", weight_strategy="none", upset_weight=1.0, lr_schedule="adaptive", n_splits=5, tscv_test_size=None):
     if kernel != "linear":
         raise ValueError("SGDClassifier requires a linear kernel. Terminating.")    
     
@@ -192,7 +203,18 @@ def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_
     else:
         X_train_processed = X_train_scaled
         X_val_processed = X_val_scaled
-
+    if add_kmeans:
+        print(f"Applying KMeans clustering (k={n_clusters}) for SGD-SVM...")
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto')
+        t_distances = kmeans.fit_transform(X_train_processed)
+        X_train_processed = np.hstack((X_train_processed, t_distances))
+        
+        if X_val_processed is not None:
+            v_distances = kmeans.transform(X_val_processed)
+            X_val_processed = np.hstack((X_val_processed, v_distances))
+            
+        kmeans_path = output_dir / "svm_sgd_kmeans.joblib"
+        joblib.dump(kmeans, kmeans_path)
     optuna.logging.set_verbosity(optuna.logging.INFO)
     db_path = output_dir / "svm_sklearn_sgd_optuna.db"
     storage_url = f"sqlite:///{db_path.absolute()}"
@@ -205,7 +227,7 @@ def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_
         direction="maximize"
     )
     
-    study.optimize(lambda trial: objective(trial, X_train, y_train, X_val, y_val, c_min, c_max, add_pca, validation, weight_strategy, upset_weight, lr_schedule, n_splits, tscv_test_size), n_trials=n_trials)
+    study.optimize(lambda trial: objective(trial, X_train, y_train, X_val, y_val, c_min, c_max, add_pca, add_kmeans, n_clusters, validation, weight_strategy, upset_weight, lr_schedule, n_splits, tscv_test_size), n_trials=n_trials)
         
     best_params = study.best_params
     best_alpha = 1.0 / best_params["C"]
@@ -253,9 +275,18 @@ def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_
     plot_optuna_history(study, reports_dir)
     
     if add_pca:
-        final_feature_names = [f"PC{i+1}" for i in range(X_train_processed.shape[1])]
+        # Subtract the KMeans columns to get the true number of Principal Components
+        n_pcs = X_train_processed.shape[1] - (n_clusters if add_kmeans else 0)
+        final_feature_names = [f"PC{i+1}" for i in range(n_pcs)]
     else:
         final_feature_names = list(X_train.columns)
+        
+    # Append the new K-Means features to the name list so they match the coefficients
+    if add_kmeans:
+        kmeans_names = [f"KMeans_Dist_C{i+1}" for i in range(n_clusters)]
+        final_feature_names.extend(kmeans_names)
+        
+    plot_feature_importance(final_clf, final_feature_names, reports_dir)
         
     plot_feature_importance(final_clf, final_feature_names, reports_dir)
 
@@ -271,6 +302,8 @@ def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_
         "best_eta0": best_eta0,
         "val_accuracy": study.best_value,
         "pca_applied": add_pca,
+        "kmeans_applied": add_kmeans,  # <--- NEW
+        "n_clusters": n_clusters if add_kmeans else 0, # <--- NEW
         "weight_strategy": weight_strategy,
         "upset_weight": upset_weight,
         "features_used": final_feature_names

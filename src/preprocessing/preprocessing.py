@@ -67,7 +67,7 @@ class Preprocessing:
         # --- UPDATED: Recalculate based on ratio (ratio holds true even after augmentation doubles size) ---
         current_train_idx = int(len(data) * train_ratio)
         
-        data = feature_selection(data, current_train_idx, k=40) 
+        data = feature_selection(data, current_train_idx, k=29) 
         
         nan_cols = data.columns[data.isna().any()].tolist()
         if nan_cols:

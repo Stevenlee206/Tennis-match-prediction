@@ -11,7 +11,12 @@ from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA  # <--- ADDED PCA IMPORT
 from sklearn.metrics import accuracy_score
+from sklearn.cluster import KMeans
+import warnings
 
+# Mute Scikit-Learn FutureWarnings caused by third-party libraries like sktree
+warnings.filterwarnings("ignore", category=FutureWarning, module="sklearn")
+warnings.filterwarnings("ignore", category=FutureWarning, module="sktree")
 # =====================================================================
 # HOTFIX: Patch Scikit-Learn (Kept from original)
 # =====================================================================
@@ -180,7 +185,7 @@ def generate_sample_weights(X_raw, y_raw, strategy="none", base_weight=1.0):
 
     return weights
 # ---> ADDED add_pca ARGUMENT
-def objective(trial, X_train, y_train, X_val, y_val, n_est_min, n_est_max, depth_min, depth_max, variant="rf", add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0, n_splits=5, tscv_test_size=None):
+def objective(trial, X_train, y_train, X_val, y_val, n_est_min, n_est_max, depth_min, depth_max, variant="rf", add_pca=False, add_kmeans=False, n_clusters=5, validation="holdout", weight_strategy="none", upset_weight=1.0, n_splits=5, tscv_test_size=None):
     params = {
         "n_estimators": trial.suggest_int("n_estimators", n_est_min, n_est_max),
         "max_depth": trial.suggest_int("max_depth", depth_min, depth_max),
@@ -232,7 +237,12 @@ def objective(trial, X_train, y_train, X_val, y_val, n_est_min, n_est_max, depth
             X_v_processed = pca.transform(X_v_scaled)
         else:
             X_t_processed, X_v_processed = X_t_scaled, X_v_scaled
-            
+        if add_kmeans:
+            kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto')
+            t_distances = kmeans.fit_transform(X_t_processed)
+            v_distances = kmeans.transform(X_v_processed)
+            X_t_processed = np.hstack((X_t_processed, t_distances))
+            X_v_processed = np.hstack((X_v_processed, v_distances)) 
         weights = generate_sample_weights(X_train, y_train, weight_strategy, upset_weight)
         
         with parallel_backend("threading"):
@@ -268,7 +278,12 @@ def objective(trial, X_train, y_train, X_val, y_val, n_est_min, n_est_max, depth
                 X_v_processed = pca.transform(X_v_scaled)
             else:
                 X_t_processed, X_v_processed = X_t_scaled, X_v_scaled
-                
+            if add_kmeans:
+                kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto')
+                t_distances = kmeans.fit_transform(X_t_processed)
+                v_distances = kmeans.transform(X_v_processed)
+                X_t_processed = np.hstack((X_t_processed, t_distances))
+                X_v_processed = np.hstack((X_v_processed, v_distances))  
             # ---> GENERATE AND APPLY WEIGHTS FOR THIS FOLD
             weights_cv = generate_sample_weights(X_t_cv, y_t_cv, weight_strategy, upset_weight)
             
@@ -320,7 +335,7 @@ def plot_feature_importance(clf, feature_names, save_path, variant):
 # ---> ADDED add_pca ARGUMENT
 def run_rf_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, 
                     n_trials=30, n_est_min=50, n_est_max=500, depth_min=5, depth_max=50, 
-                    variant="rf", add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0, n_splits=3, tscv_test_size=None):
+                    variant="rf", add_pca=False, add_kmeans=False, n_clusters=5, validation="holdout", weight_strategy="none", upset_weight=1.0, n_splits=3, tscv_test_size=None):
     output_dir = Path(output_dir)
     reports_dir = Path(reports_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -353,7 +368,18 @@ def run_rf_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
         X_train_processed = X_train_scaled
         if X_val_scaled is not None:
             X_val_processed = X_val_scaled
-
+    if add_kmeans:
+        print(f"Applying KMeans clustering (k={n_clusters}) for {variant.upper()}...")
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto')
+        t_distances = kmeans.fit_transform(X_train_processed)
+        X_train_processed = np.hstack((X_train_processed, t_distances))
+        
+        if X_val_scaled is not None:
+            v_distances = kmeans.transform(X_val_processed)
+            X_val_processed = np.hstack((X_val_processed, v_distances))
+            
+        kmeans_path = output_dir / f"{variant}_kmeans.joblib"
+        joblib.dump(kmeans, kmeans_path)
     optuna.logging.set_verbosity(optuna.logging.INFO)
     db_path = output_dir / f"{variant}_sklearn_optuna.db"
     study_name = f"{variant}_optimization_{output_dir.name}"
@@ -370,7 +396,7 @@ def run_rf_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
     print(f"\nStarting Optuna search ({n_trials} trials | Variant: {variant.upper()} | Strategy: {weight_strategy.upper()} | Base Wt: {upset_weight})...")
     
     study.optimize(
-        lambda trial: objective(trial, X_train, y_train, X_val, y_val, n_est_min, n_est_max, depth_min, depth_max, variant, add_pca, validation, weight_strategy, upset_weight, n_splits, tscv_test_size),
+        lambda trial: objective(trial, X_train, y_train, X_val, y_val, n_est_min, n_est_max, depth_min, depth_max, variant, add_pca, add_kmeans, n_clusters, validation, weight_strategy, upset_weight, n_splits, tscv_test_size),
         n_trials=n_trials
     )
     
@@ -420,9 +446,16 @@ def run_rf_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
     
     # ---> DYNAMIC FEATURE NAMES IF PCA IS ENABLED
     if add_pca:
-        final_feature_names = [f"PC{i+1}" for i in range(X_train_processed.shape[1])]
+        # Subtract the KMeans columns to get the true number of Principal Components
+        n_pcs = X_train_processed.shape[1] - (n_clusters if add_kmeans else 0)
+        final_feature_names = [f"PC{i+1}" for i in range(n_pcs)]
     else:
         final_feature_names = list(X_train.columns)
+        
+    # Append the new K-Means features to the name list so they match the coefficients
+    if add_kmeans:
+        kmeans_names = [f"KMeans_Dist_C{i+1}" for i in range(n_clusters)]
+        final_feature_names.extend(kmeans_names)
 
     config = {
         "model_type": variant.upper(),
@@ -431,8 +464,10 @@ def run_rf_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
         "train_accuracy": train_acc,
         "val_accuracy": study.best_value,
         "pca_applied": add_pca,
-        "weight_strategy": weight_strategy, # <--- NEW
-        "upset_weight": upset_weight,       # <--- NEW
+        "kmeans_applied": add_kmeans,  # <--- NEW
+        "n_clusters": n_clusters if add_kmeans else 0, # <--- NEW
+        "weight_strategy": weight_strategy,
+        "upset_weight": upset_weight,
         "features_used": final_feature_names
     }
     with open(output_dir / f"{variant}_config.json", "w") as f:

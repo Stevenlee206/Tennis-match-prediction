@@ -84,6 +84,8 @@ def main():
     parser.add_argument("--torch_sched", type=str, choices=["constant", "cosine", "step", "plateau"], default="cosine", help="Learning rate scheduler for PyTorch SVM")
     parser.add_argument("--batch_size", type=int, default=64, help="Batch size for PyTorch DataLoaders")
     parser.add_argument("--rf_variant", type=str, choices=["rf", "extra_trees", "rrf", "rotation_forest", "oblique", "weighted"], default="rf", help="Specific RF variant (for Optuna)")
+    parser.add_argument("--add_kmeans", action="store_true", help="Apply KMeans clustering to add spatial features")
+    parser.add_argument("--n_clusters", type=int, default=5, help="Number of clusters if using --add_kmeans")
     parser.add_argument("--add_pca", action="store_true", help="Apply PCA for dimensionality reduction and denoising before passing to model")
     parser.add_argument("--mode", type=str, choices=["standard", "sgd"], default="standard")
     parser.add_argument("--optimizer", type=str, choices=["optuna", "pso", "ga", "grid"], default="optuna", help="Optimizer to tune hyperparameters")
@@ -245,17 +247,18 @@ def main():
                 if args.mode == "standard":
                     run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, 
                                  n_trials=args.n_trials, kernel=args.kernel, c_min=args.c_min, c_max=args.c_max,                         
-                                 add_pca=args.add_pca, validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight)
+                                 add_pca=args.add_pca, validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight, add_kmeans=args.add_kmeans, n_clusters=args.n_clusters)
                 elif args.mode == "sgd":
                     run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, 
                                  n_trials=args.n_trials, n_epochs=args.epochs, kernel="linear", c_min=args.c_min, c_max=args.c_max,                        
-                                 add_pca=args.add_pca, validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight, lr_schedule=args.lr_schedule)
+                                 add_pca=args.add_pca, add_kmeans=args.add_kmeans, n_clusters=args.n_clusters, # <--- ADDED KMEANS ARGS
+                                 validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight, lr_schedule=args.lr_schedule)
         
         elif args.model == "pytorch_svm":
             run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, 
                          n_trials=args.n_trials, epochs=args.epochs, batch_size=args.batch_size, c_min=args.c_min, c_max=args.c_max,                         
                          add_pca=args.add_pca, validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight,
-                         torch_opt=args.torch_opt, torch_sched=args.torch_sched)
+                         torch_opt=args.torch_opt, torch_sched=args.torch_sched, add_kmeans=args.add_kmeans, n_clusters=args.n_clusters)
         elif args.model == "pytorch_mlp":
             run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, 
                          n_trials=args.n_trials, epochs=args.epochs, batch_size=args.batch_size, 
@@ -282,9 +285,10 @@ def main():
                 run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, n_est_steps=args.rf_n_est_steps, depth_min=args.rf_depth_min, depth_max=args.rf_depth_max, depth_steps=args.rf_depth_steps)
             else: # Optuna
                 run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, 
-                             n_trials=args.n_trials, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, 
-                             depth_min=args.rf_depth_min, depth_max=args.rf_depth_max, variant=args.rf_variant,
-                             add_pca=args.add_pca, validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight)
+                         n_trials=args.n_trials, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, 
+                         depth_min=args.rf_depth_min, depth_max=args.rf_depth_max, variant=args.rf_variant,
+                         add_pca=args.add_pca, add_kmeans=args.add_kmeans, n_clusters=args.n_clusters, # <--- NEW
+                         validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight)
 
         print("\n--- Training and Tuning Complete ---")
         
@@ -337,7 +341,26 @@ def main():
                     X_val_scaled = pca.transform(X_val_scaled)
                 else:
                     print(f"⚠️ Warning: PCA enabled but {pca_name} not found at {pca_path}!")
-            
+            if hasattr(args, 'add_kmeans') and args.add_kmeans:
+                # ---> DYNAMIC KMEANS NAMING ADDED HERE <---
+                if args.model in ["pytorch_svm", "pytorch_mlp", "tabnet", "deepforest"]:
+                    prefix = args.model.replace('pytorch_', '') + '_pytorch' if 'pytorch' in args.model else args.model
+                    kmeans_name = f"{prefix}_kmeans.joblib"
+                elif args.model == "svm":
+                    kmeans_name = "svm_sgd_kmeans.joblib" if args.mode == "sgd" else f"{args.kernel}_kmeans.joblib"
+                else:
+                    kmeans_name = f"{args.rf_variant}_kmeans.joblib"
+                
+                # Use BASE_OUT for holdout, global_out for walk-forward
+                current_out_dir = BASE_OUT if args.validation == "holdout" else global_out 
+                kmeans_path = current_out_dir / kmeans_name
+                
+                if kmeans_path.exists():
+                    kmeans = joblib.load(kmeans_path)
+                    v_distances = kmeans.transform(X_val_scaled) 
+                    X_val_scaled = np.hstack((X_val_scaled, v_distances))
+                else:
+                    print(f"⚠️ Warning: KMeans enabled but {kmeans_name} not found at {kmeans_path}!")
             # Properly Route Model Loading & Prediction
             if args.model == "pytorch_svm":
                 import torch
@@ -411,19 +434,20 @@ def main():
                     run_pipeline(X_train_val_pool, y_train_val_pool, None, None, global_out, global_rep, 
                                  n_trials=args.n_trials, kernel=args.kernel, c_min=args.c_min, c_max=args.c_max,                         
                                  add_pca=args.add_pca, validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight,
-                                 n_splits=args.n_splits, tscv_test_size=tscv_test_size) # <-- NEW
+                                 n_splits=args.n_splits, tscv_test_size=tscv_test_size, add_kmeans=args.add_kmeans, n_clusters=args.n_clusters) # <-- NEW
                 elif args.mode == "sgd":
                     run_pipeline(X_train_val_pool, y_train_val_pool, None, None, global_out, global_rep, 
                                  n_trials=args.n_trials, n_epochs=args.epochs, kernel="linear", c_min=args.c_min, c_max=args.c_max,                        
-                                 add_pca=args.add_pca, validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight, lr_schedule=args.lr_schedule,
-                                 n_splits=args.n_splits, tscv_test_size=tscv_test_size) # <-- NEW
+                                 add_pca=args.add_pca, add_kmeans=args.add_kmeans, n_clusters=args.n_clusters, # <--- ADDED KMEANS ARGS
+                                 validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight, lr_schedule=args.lr_schedule,
+                                 n_splits=args.n_splits, tscv_test_size=tscv_test_size)
         
         elif args.model == "pytorch_svm":
             run_pipeline(X_train_val_pool, y_train_val_pool, None, None, global_out, global_rep, 
                          n_trials=args.n_trials, epochs=args.epochs, batch_size=args.batch_size, c_min=args.c_min, c_max=args.c_max,                         
                          add_pca=args.add_pca, validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight,
                          torch_opt=args.torch_opt, torch_sched=args.torch_sched,
-                         n_splits=args.n_splits, tscv_test_size=tscv_test_size) # <-- NEW
+                         n_splits=args.n_splits, tscv_test_size=tscv_test_size, add_kmeans=args.add_kmeans, n_clusters=args.n_clusters) # <-- NEW
                          
         elif args.model == "deepforest":
             run_pipeline(X_train_val_pool, y_train_val_pool, None, None, global_out, global_rep, 
@@ -448,12 +472,13 @@ def main():
                          n_splits=args.n_splits, tscv_test_size=tscv_test_size) # <-- NEW
                          
         elif args.model == "rf":
+            # FIXED: Passing X_train_val_pool and global_out instead of X_train/BASE_OUT
             run_pipeline(X_train_val_pool, y_train_val_pool, None, None, global_out, global_rep, 
-                          n_trials=args.n_trials, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, 
-                          depth_min=args.rf_depth_min, depth_max=args.rf_depth_max, variant=args.rf_variant,
-                          add_pca=args.add_pca, validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight,
-                          n_splits=args.n_splits, tscv_test_size=tscv_test_size) # <-- NEW
-
+                         n_trials=args.n_trials, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, 
+                         depth_min=args.rf_depth_min, depth_max=args.rf_depth_max, variant=args.rf_variant,
+                         add_pca=args.add_pca, add_kmeans=args.add_kmeans, n_clusters=args.n_clusters,
+                         validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight,
+                         n_splits=args.n_splits, tscv_test_size=tscv_test_size) # <--- ALSO ADDED TSCV ARGS
         # ==========================================
         # RUN BIAS EVALUATION ON QUARANTINED CHUNK 7
         # ==========================================
@@ -504,7 +529,27 @@ def main():
                 if pca_path.exists():
                     pca = joblib.load(pca_path)
                     X_test_scaled = pca.transform(X_test_scaled) 
-            
+            if hasattr(args, 'add_kmeans') and args.add_kmeans:
+                # ---> DYNAMIC KMEANS NAMING ADDED HERE <---
+                if args.model in ["pytorch_svm", "pytorch_mlp", "tabnet", "deepforest"]:
+                    prefix = args.model.replace('pytorch_', '') + '_pytorch' if 'pytorch' in args.model else args.model
+                    kmeans_name = f"{prefix}_kmeans.joblib"
+                elif args.model == "svm":
+                    kmeans_name = "svm_sgd_kmeans.joblib" if args.mode == "sgd" else f"{args.kernel}_kmeans.joblib"
+                else:
+                    kmeans_name = f"{args.rf_variant}_kmeans.joblib"
+                
+                # Use BASE_OUT for holdout, global_out for walk-forward
+                current_out_dir = BASE_OUT if args.validation == "holdout" else global_out 
+                kmeans_path = current_out_dir / kmeans_name
+                
+                if kmeans_path.exists():
+                    kmeans = joblib.load(kmeans_path)
+                    # Correctly transforming X_test_scaled for Chunk 7
+                    v_distances = kmeans.transform(X_test_scaled) 
+                    X_test_scaled = np.hstack((X_test_scaled, v_distances))
+                else:
+                    print(f"⚠️ Warning: KMeans enabled but {kmeans_name} not found at {kmeans_path}!")
             # FIXED: Properly Route Model Loading & Prediction for ALL models
             if args.model == "pytorch_svm":
                 import torch
