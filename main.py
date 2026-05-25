@@ -122,7 +122,16 @@ def main():
     # Weights Strategy
     parser.add_argument("--weight_strategy", type=str, choices=["none", "static", "magnitude", "temporal"], default="none", help="Which sample weighting schedule to use.")
     parser.add_argument("--upset_weight", type=float, default=2.0, help="The base penalty multiplier for upsets (Used if strategy is not 'none').")
+    parser.add_argument("--config", type=str, default="", help="Path to JSON config file to override arguments")
+    
     args = parser.parse_args()
+    
+    if args.config:
+        import json
+        with open(args.config, 'r') as f:
+            cfg = json.load(f)
+        for k, v in cfg.items():
+            setattr(args, k, v)
 
     # Safety Checks
     if args.mode == "sgd" and args.model != "svm":
@@ -396,8 +405,9 @@ def main():
                     # MLP outputs logits. Sigmoid > 0.5 gets the binary class
                     y_pred_val = (torch.sigmoid(preds_raw) > 0.5).cpu().numpy().astype(int).flatten()              
             elif args.model == "predictive_coding":
-                # Predictive Coding is numpy based
-                from src.model.Predictive_Coding.pc_network import PredictiveCodingNetwork, PCNetworkConfig
+                import torch
+                from src.model.Predictive_Coding.pc_network_torch import PredictiveCodingNetworkTorch
+                from src.model.Predictive_Coding.pc_network import PCNetworkConfig
                 with open(config_path, 'r') as f:
                     cfg = json.load(f)
                 
@@ -405,12 +415,13 @@ def main():
                 
                 # layer sizes include in and out
                 layer_sizes = [X_val_scaled.shape[1], *cfg['model_params']['hidden_sizes'], 1]
-                best_model = PredictiveCodingNetwork(layer_sizes=layer_sizes, cfg=pc_cfg)
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                best_model = PredictiveCodingNetworkTorch(layer_sizes=layer_sizes, cfg=pc_cfg, device=device)
                 
                 # Load weights
                 state = dict(np.load(model_path))
                 best_model.load_state_dict(state)
-                probs = best_model.predict_proba(X_val_scaled)
+                probs = best_model.predict_proba_torch(X_val_scaled).detach().cpu().numpy()
                 y_pred_val = (probs >= 0.5).astype(int)
             else: # SKLearn / DeepForest models
                 best_model = joblib.load(model_path)
@@ -498,17 +509,20 @@ def main():
                 scaler = joblib.load(scaler_path)
                 X_test_scaled = scaler.transform(X_test)
                 
-                from src.model.Predictive_Coding.pc_network import PredictiveCodingNetwork, PCNetworkConfig
+                import torch
+                from src.model.Predictive_Coding.pc_network_torch import PredictiveCodingNetworkTorch
+                from src.model.Predictive_Coding.pc_network import PCNetworkConfig
                 with open(config_path, 'r') as f:
                     cfg = json.load(f)
                 
                 pc_cfg = PCNetworkConfig(**cfg.get('best_params', {}))
                 layer_sizes = [X_test_scaled.shape[1], *cfg['model_params']['hidden_sizes'], 1]
-                best_model = PredictiveCodingNetwork(layer_sizes=layer_sizes, cfg=pc_cfg)
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                best_model = PredictiveCodingNetworkTorch(layer_sizes=layer_sizes, cfg=pc_cfg, device=device)
                 
                 state = dict(np.load(model_path))
                 best_model.load_state_dict(state)
-                probs = best_model.predict_proba(X_test_scaled)
+                probs = best_model.predict_proba_torch(X_test_scaled).detach().cpu().numpy()
                 y_pred_test = (probs >= 0.5).astype(int)
                 
                 bias_metrics = evaluate_model_bias(y_test.values, y_pred_test, X_test, dataset_name="(UNSEEN TEST SET)")
@@ -590,7 +604,9 @@ def main():
                     preds_raw = best_model(torch.FloatTensor(X_val_scaled).to(device))
                     y_pred_val = (preds_raw > 0).cpu().numpy().astype(int)
             elif args.model == "predictive_coding":
-                from src.model.Predictive_Coding.pc_network import PredictiveCodingNetwork, PCNetworkConfig
+                import torch
+                from src.model.Predictive_Coding.pc_network_torch import PredictiveCodingNetworkTorch
+                from src.model.Predictive_Coding.pc_network import PCNetworkConfig
                 with open(config_path, 'r') as f:
                     cfg = json.load(f)
                 
@@ -598,12 +614,13 @@ def main():
                 
                 # layer sizes include in and out
                 layer_sizes = [X_val_scaled.shape[1], *cfg['model_params']['hidden_sizes'], 1]
-                best_model = PredictiveCodingNetwork(layer_sizes=layer_sizes, cfg=pc_cfg)
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                best_model = PredictiveCodingNetworkTorch(layer_sizes=layer_sizes, cfg=pc_cfg, device=device)
                 
                 # Load weights
                 state = dict(np.load(model_path))
                 best_model.load_state_dict(state)
-                probs = best_model.predict_proba(X_val_scaled)
+                probs = best_model.predict_proba_torch(X_val_scaled).detach().cpu().numpy()
                 y_pred_val = (probs >= 0.5).astype(int)
             else: # SKLearn / DeepForest models
                 best_model = joblib.load(model_path)

@@ -16,8 +16,17 @@ from importlib import import_module
 import torch
 import torch.nn.functional as F
 
-# Re-use bias metric and weight generation from SVM logic
-from src.models.svm.svm_sklearn_optuna import generate_sample_weights
+# Re-use bias metric and weight generation
+def generate_sample_weights(X_train, y_train, weight_strategy="none", upset_weight=1.0):
+    if weight_strategy == "none":
+        return None
+    weights = np.ones(len(y_train))
+    # Simple static strategy fallback
+    if weight_strategy == "static" and 'elo_diff' in X_train.columns:
+        upsets = (X_train['elo_diff'] > 0) != y_train
+        weights[upsets] = upset_weight
+    return weights
+
 from src.model.Predictive_Coding.pc_network import PCNetworkConfig
 from src.model.Predictive_Coding.pc_network_torch import PredictiveCodingNetworkTorch
 from src.model.util.metrics import binary_classification_metrics
@@ -97,21 +106,26 @@ def plot_training_curve(metrics_hist, save_path):
     plt.savefig(save_path / "training_curve.png", dpi=300)
     plt.close()
 
-def train_pc_model_loop(model, X_t, y_t, X_v, y_v, weights_t, max_epochs=100, batch_size=256, verbose=False):
+def train_pc_model_loop(model, X_t, y_t, X_v=None, y_v=None, weights_t=None, max_epochs=100, batch_size=256, verbose=False, patience=10):
     t0 = time.perf_counter()
     rng = np.random.default_rng(model.cfg.random_seed)
     
     best_acc = 0.0
     best_state = None
-    best_epoch = 0
+    best_epoch = max_epochs
     metrics_history = []
+    epochs_no_improve = 0
     
     device = getattr(model, "device", "cuda" if torch.cuda.is_available() else "cpu")
 
     X_t_t = torch.tensor(X_t, device=device, dtype=torch.float32)
     y_t_t = torch.tensor(y_t, device=device, dtype=torch.float32).view(-1)
-    X_v_t = torch.tensor(X_v, device=device, dtype=torch.float32)
-    y_v_t = torch.tensor(y_v, device=device, dtype=torch.float32).view(-1)
+    
+    if X_v is not None and y_v is not None:
+        X_v_t = torch.tensor(X_v, device=device, dtype=torch.float32)
+        y_v_t = torch.tensor(y_v, device=device, dtype=torch.float32).view(-1)
+    else:
+        X_v_t, y_v_t = None, None
 
     w_t = None
     if weights_t is not None:
@@ -136,11 +150,6 @@ def train_pc_model_loop(model, X_t, y_t, X_v, y_v, weights_t, max_epochs=100, ba
             energy = model.train_on_batch(xb, yb, sample_weights=w_opt)
             energies.append(energy)
             
-        # Eval on val (device)
-        val_probs_t = model.predict_proba_torch(X_v_t)
-        val_preds_t = (val_probs_t >= 0.5).to(torch.float32)
-        acc = float((val_preds_t == y_v_t).to(torch.float32).mean().item())
-
         # Eval on train (device)
         train_probs_t = model.predict_proba_torch(X_t_t)
         train_preds_t = (train_probs_t >= 0.5).to(torch.float32)
@@ -150,6 +159,15 @@ def train_pc_model_loop(model, X_t, y_t, X_v, y_v, weights_t, max_epochs=100, ba
         train_loss = float(F.binary_cross_entropy(train_probs_t, y_t_t).item())
         
         avg_energy = np.mean(energies)
+        
+        if X_v_t is not None:
+            # Eval on val (device)
+            val_probs_t = model.predict_proba_torch(X_v_t)
+            val_preds_t = (val_probs_t >= 0.5).to(torch.float32)
+            acc = float((val_preds_t == y_v_t).to(torch.float32).mean().item())
+        else:
+            acc = None
+            
         metrics_history.append({
             "epoch": epoch,
             "train_energy": avg_energy,
@@ -159,12 +177,29 @@ def train_pc_model_loop(model, X_t, y_t, X_v, y_v, weights_t, max_epochs=100, ba
         })
         
         if verbose:
-            print(f"Epoch {epoch:03d}/{max_epochs} | Train Energy: {avg_energy:.4f} | Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.4f} | Val Acc: {acc:.4f}")
+            if acc is not None:
+                print(f"Epoch {epoch:03d}/{max_epochs} | Train Energy: {avg_energy:.4f} | Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.4f} | Val Acc: {acc:.4f}")
+            else:
+                print(f"Epoch {epoch:03d}/{max_epochs} | Train Energy: {avg_energy:.4f} | Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.4f}")
             
-        if acc > best_acc:
-            best_acc = acc
+        # Use acc for early stopping if available, otherwise just use the final epoch state
+        current_acc = acc if acc is not None else train_acc
+        
+        if current_acc >= best_acc:
+            best_acc = current_acc
             best_epoch = epoch
             best_state = model.get_state_dict()
+            epochs_no_improve = 0
+        else:
+            epochs_no_improve += 1
+            
+        if X_v_t is not None and epochs_no_improve >= patience:
+            if verbose:
+                print(f"Early stopping at epoch {epoch}")
+            break
+            
+    if best_state is None:
+        best_state = model.get_state_dict()
             
     train_time = time.perf_counter() - t0
     if verbose:
@@ -187,7 +222,7 @@ def objective(trial, X_train, y_train, X_val, y_val, add_pca=False, validation="
     width = trial.suggest_categorical("width", [16, 32, 64, 128])
     hidden_sizes = [width] * depth
     
-    batch_size = trial.suggest_categorical("batch_size", [64, 128, 256, 512])
+    batch_size = trial.suggest_categorical("batch_size", [64, 128, 256])
     epochs = trial.suggest_categorical("epochs", [20, 50, 100])
     
     if validation == "holdout":
@@ -297,18 +332,17 @@ def run_pc_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
     # Retrain Phase
     print("Retraining final model on full train set with optimal parameters to get final weights...")
     
-    # Train using the entire available X_train, but validating on the last 10% or the explicit X_val
+    # Train using the entire available X_train
     if validation == "holdout":
         X_t_eval, y_t_eval = X_train, y_train
         X_v_eval, y_v_eval = X_val, y_val
     else:
-        # For walk_forward global, X_val is None, X_train is the entire pool.
-        split_idx = int(len(X_train) * 0.9)
-        X_t_eval, X_v_eval = X_train.iloc[:split_idx], X_train.iloc[split_idx:]
-        y_t_eval, y_v_eval = y_train.iloc[:split_idx], y_train.iloc[split_idx:]
+        # For walk_forward global, X_val is None, X_train is the entire pool (0-90%).
+        X_t_eval, y_t_eval = X_train.copy(), y_train.copy()
+        X_v_eval, y_v_eval = None, None
         
-    # Drop augmented correctly for final val
-    if 'is_augmented' in X_v_eval.columns:
+    # Drop augmented correctly for final val if it exists
+    if X_v_eval is not None and 'is_augmented' in X_v_eval.columns:
         y_v_eval = y_v_eval[X_v_eval['is_augmented'] == 0]
         X_v_eval = X_v_eval[X_v_eval['is_augmented'] == 0]
         
@@ -316,16 +350,20 @@ def run_pc_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
     final_weights = generate_sample_weights(X_t_eval, y_t_eval, weight_strategy, upset_weight)
 
     # Drop flag
-    drop_c = ['is_augmented']
+    drop_c = ['is_augmented', 'match_id']
     X_t_clean = X_t_eval.drop(columns=[c for c in drop_c if c in X_t_eval.columns])
-    X_v_clean = X_v_eval.drop(columns=[c for c in drop_c if c in X_v_eval.columns])
     
-    scaler = StandardScaler()
-    X_t_scaled = scaler.fit_transform(X_t_clean).astype(np.float32)
-    X_v_scaled = scaler.transform(X_v_clean).astype(np.float32)
-    
+    scaler = StandardScaler().fit(X_t_clean)
+    X_t_scaled = scaler.transform(X_t_clean).astype(np.float32)
     y_t_np = y_t_eval.values.astype(np.float32)
-    y_v_np = y_v_eval.values.astype(np.float32)
+    
+    if X_v_eval is not None:
+        X_v_clean = X_v_eval.drop(columns=[c for c in drop_c if c in X_v_eval.columns])
+        X_v_scaled = scaler.transform(X_v_clean).astype(np.float32)
+        y_v_np = y_v_eval.values.astype(np.float32)
+    else:
+        X_v_scaled = None
+        y_v_np = None
     
     pc_cfg = PCNetworkConfig(
         learning_rate=best_params['learning_rate'],
@@ -343,12 +381,13 @@ def run_pc_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = PredictiveCodingNetworkTorch(layer_sizes=layer_sizes, cfg=pc_cfg, device=device)
     
-    epochs = best_params['epochs']
+    # For global retrain without validation, train exactly to best_params['epochs']
+    retrain_epochs = best_params['epochs']
     batch_size = best_params['batch_size']
     
-    best_acc, best_epoch, best_state, metrics_hist, train_time = train_pc_model_loop(
+    best_acc, best_ep, best_state, metrics_hist, train_time = train_pc_model_loop(
         model, X_t_scaled, y_t_np, X_v_scaled, y_v_np, 
-        final_weights, max_epochs=epochs, batch_size=batch_size, verbose=True
+        final_weights, max_epochs=retrain_epochs, batch_size=batch_size, verbose=True, patience=20
     )
     
     # Save artifacts
@@ -359,12 +398,15 @@ def run_pc_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
     # Save training loop log text
     with open(log_path, 'w') as f:
         f.write("Predictive Coding Final Training Log\n")
-        f.write(f"Hyperparameters: epochs={epochs}, batch_size={batch_size}, lr={best_params['learning_rate']:.4f}\n")
+        f.write(f"Hyperparameters: epochs={retrain_epochs}, batch_size={batch_size}, lr={best_params['learning_rate']:.4f}\n")
         f.write("="*80 + "\n")
         for m in metrics_hist:
-            f.write(f"Epoch {m['epoch']:03d}/{epochs} | Train Energy: {m['train_energy']:.4f} | Train Loss (BCE): {m['train_loss']:.4f} | Train Acc: {m['train_acc']:.4f} | Val Acc: {m['val_acc']:.4f}\n")
+            val_str = f" | Val Acc: {m['val_acc']:.4f}" if m['val_acc'] is not None else ""
+            f.write(f"Epoch {m['epoch']:03d}/{retrain_epochs} | Train Energy: {m['train_energy']:.4f} | Train Loss (BCE): {m['train_loss']:.4f} | Train Acc: {m['train_acc']:.4f}{val_str}\n")
         f.write("="*80 + "\n")
-        f.write(f"Best Val Acc: {best_acc:.4f} at epoch {best_epoch}\n")
+        
+        acc_label = "Val Acc" if (metrics_hist and metrics_hist[0]['val_acc'] is not None) else "Train Acc"
+        f.write(f"Best {acc_label}: {best_acc:.4f} at epoch {best_ep}\n")
     
     config = {
         "model_type": "PredictiveCoding",
@@ -379,12 +421,15 @@ def run_pc_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
         "model_params": {
             "depth": depth,
             "width": width,
-            "epochs": epochs,
-            "batch_size": batch_size,
-            "hidden_sizes": hidden_sizes
+            "hidden_sizes": hidden_sizes,
+            "training_params": {
+                "batch_size": batch_size,
+                "epochs": retrain_epochs,
+                "weight_strategy": weight_strategy
+            }
         },
         "evaluation": {
-            "best_epoch": best_epoch,
+            "best_epoch": best_ep,
             "test_accuracy": best_acc,
             "training_time_seconds": train_time
         },
@@ -397,17 +442,18 @@ def run_pc_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
     
     # Generate Plots
     plot_optuna_history(study, reports_dir)
-    plot_feature_importance_permutation(model, X_v_scaled, y_v_np, X_v_clean.columns, reports_dir)
     plot_training_curve(metrics_hist, reports_dir)
     
-    from src.model.util.metrics import binary_classification_metrics, evaluate_model_bias
-    val_probs = model.predict_proba(X_v_scaled)
-    val_preds = (val_probs >= 0.5).astype(int)
-    final_metrics = binary_classification_metrics(y_v_np, val_probs)
-    print("\nFINAL METRICS ON EVAL SET (Best Epoch):")
-    for k, v in final_metrics.items():
-        print(f" - {k:>16}: {v:.4f}")
-        
-    evaluate_model_bias(y_v_np, val_preds, X_v_clean, dataset_name="(VALIDATION SET)")
+    if X_v_scaled is not None:
+        plot_feature_importance_permutation(model, X_v_scaled, y_v_np, X_v_clean.columns, reports_dir)
+        from src.model.util.metrics import binary_classification_metrics, evaluate_model_bias
+        val_probs = model.predict_proba(X_v_scaled)
+        val_preds = (val_probs >= 0.5).astype(int)
+        final_metrics = binary_classification_metrics(y_v_np, val_probs)
+        print("\nFINAL METRICS ON EVAL SET (Best Epoch):")
+        for k, v in final_metrics.items():
+            print(f" - {k:>16}: {v:.4f}")
+            
+        evaluate_model_bias(y_v_np, val_preds, X_v_clean, dataset_name="(VALIDATION SET)")
     
     return model, scaler
