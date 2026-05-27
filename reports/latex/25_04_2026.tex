@@ -1,0 +1,139 @@
+\documentclass[12pt, a4paper]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{setspace}
+
+\title{\textbf{Algorithmic Approaches to Hyperparameter Tuning}}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\section{Randome forest}
+\subsection{Exhaustive Grid Search}
+Grid Search is a brute-force hyperparameter optimization method. It defines a discrete set of values for each hyperparameter and exhaustively evaluates the model's fitness (validation accuracy) for every possible combination in the Cartesian product of these sets.
+
+\begin{algorithm}[H]
+\caption{2D Grid Search}
+\begin{algorithmic}[1]
+\State \textbf{Input:} Grid boundaries $n_{min}, n_{max}, depth_{min}, depth_{max}$, and step counts $n_{steps}, depth_{steps}$
+\State $N_{grid} \leftarrow \text{linspace}(n_{min}, n_{max}, n_{steps})$
+\State $D_{grid} \leftarrow \text{linspace}(depth_{min}, depth_{max}, depth_{steps})$
+\State $best\_acc \leftarrow -\infty$
+\State $best\_params \leftarrow \emptyset$
+
+\For{$n \in N_{grid}$}
+    \For{$d \in D_{grid}$}
+        \State $score \leftarrow \text{Evaluate}(n, d)$ \Comment{Train RF and calculate validation accuracy}
+        \If{$score > best\_acc$}
+            \State $best\_acc \leftarrow score$
+            \State $best\_params \leftarrow \{n, d\}$
+        \EndIf
+    \EndFor
+\EndFor
+
+\State \Return $best\_params, best\_acc$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Genetic Algorithm (GA)}
+The Genetic Algorithm is an evolutionary metaheuristic inspired by natural selection. The implemented 2D GA maintains a population of candidate solutions (individuals), evaluating their fitness at each generation. It applies Elitism (preserving the best individual), Tournament Selection (size 3) to choose parents, Blend Crossover to generate offspring, and Gaussian Mutation to introduce genetic diversity.
+
+\begin{algorithm}[H]
+\caption{Genetic Algorithm for Hyperparameter Tuning}
+\begin{algorithmic}[1]
+\State \textbf{Input:} Population size $P$, Generations $G$, Mutation rate $P_m = 0.2$, Bounds $B$
+\State Initialize population $\mathcal{P}_{0} \in \mathbb{R}^{P \times 2}$ uniformly within bounds $B$
+\State $gbest\_score \leftarrow -\infty$
+
+\For{$t = 1 \to G$}
+    \State Evaluate fitness $\mathcal{F}$ for each individual $x_i \in \mathcal{P}_{t-1}$
+    \State Update global best $(gbest\_pos, gbest\_score)$ if a better fitness is found
+    
+    \State $\mathcal{P}_{t}[0] \leftarrow x_{\arg\max(\mathcal{F})}$ \Comment{Elitism: Carry over the best individual}
+    
+    \For{$i = 1 \to P-1$}
+        \State $p_1 \leftarrow \text{TournamentSelection}(\mathcal{P}_{t-1}, \mathcal{F}, \text{size}=3)$
+        \State $p_2 \leftarrow \text{TournamentSelection}(\mathcal{P}_{t-1}, \mathcal{F}, \text{size}=3)$
+        
+        \State $\beta \leftarrow U(0, 1)^{2}$ \Comment{Blend Crossover}
+        \State $child \leftarrow p_1 \cdot \beta + p_2 \cdot (1 - \beta)$
+        
+        \If{$U(0, 1) < P_m$} \Comment{Gaussian Mutation}
+            \State $child[0] \leftarrow child[0] + \mathcal{N}(0, 20)$
+            \State $child[1] \leftarrow child[1] + \mathcal{N}(0, 5)$
+        \EndIf
+        
+        \State $\mathcal{P}_{t}[i] \leftarrow \text{Clip}(child, B)$
+    \EndFor
+\EndFor
+\State \Return Round($gbest\_pos$), $gbest\_score$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Particle Swarm Optimization (PSO)}
+PSO is a swarm-intelligence algorithm inspired by the flocking behavior of birds. Each candidate solution is a "particle" traversing the search space. A particle's movement is guided by its own best-known position ($pbest$) and the entire swarm's best-known position ($gbest$). The implemented standard PSO uses inertia weight $w=0.5$ and acceleration coefficients $c_1=1.5, c_2=1.5$.
+
+\begin{algorithm}[H]
+\caption{Particle Swarm Optimization (2D)}
+\begin{algorithmic}[1]
+\State \textbf{Input:} Particles $N=15$, Iterations $I=20$, $w=0.5, c_1=1.5, c_2=1.5$, Bounds $B$
+\State Initialize positions $X \in \mathbb{R}^{N \times 2}$ uniformly within bounds $B$
+\State Initialize velocities $V \in \mathbb{R}^{N \times 2}$ uniformly in $[-1, 1]$
+\State $Pbest \leftarrow X$
+\State $Pbest\_scores \leftarrow -\infty \times \mathbf{1}_{N}$
+\State $Gbest\_pos \leftarrow \emptyset$, $Gbest\_score \leftarrow -\infty$
+
+\For{$t = 1 \to I$}
+    \For{$i = 1 \to N$}
+        \State $score \leftarrow \text{Evaluate}(\text{Round}(X_i))$
+        
+        \If{$score > Pbest\_scores[i]$}
+            \State $Pbest\_scores[i] \leftarrow score$
+            \State $Pbest[i] \leftarrow X_i$
+        \EndIf
+        
+        \If{$score > Gbest\_score$}
+            \State $Gbest\_score \leftarrow score$
+            \State $Gbest\_pos \leftarrow X_i$
+        \EndIf
+    \EndFor
+    
+    \State $R_1, R_2 \sim U(0, 1)^{N \times 2}$
+    \State $V \leftarrow w \cdot V + c_1 \cdot R_1 \cdot (Pbest - X) + c_2 \cdot R_2 \cdot (Gbest\_pos - X)$
+    \State $X \leftarrow \text{Clip}(X + V, B)$
+\EndFor
+
+\State \Return Round($Gbest\_pos$), $Gbest\_score$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Optuna Optimization (Bayesian / TPE)}
+Optuna operates fundamentally differently from GA or PSO by treating hyperparameter tuning as a Sequential Model-Based Optimization (SMBO) problem. By default, it utilizes the Tree-structured Parzen Estimator (TPE) algorithm. Rather than random or heuristic-driven jumps, TPE builds a probabilistic surrogate model of the objective function $P(x | y)$ and $P(y)$, actively sampling the hyperparameter combinations that maximize the Expected Improvement (EI).
+
+\begin{algorithm}[H]
+\caption{Optuna Optimization Loop}
+\begin{algorithmic}[1]
+\State \textbf{Input:} Number of trials $T=30$, Parameter search spaces $\mathcal{S}$
+\State Initialize Trial History $\mathcal{H} \leftarrow \emptyset$
+
+\For{$t = 1 \to T$}
+    \State $\theta_t \leftarrow \text{TPE\_Suggest}(\mathcal{H}, \mathcal{S})$ \Comment{Suggests params maximizing Expected Improvement}
+    \State $n\_est \leftarrow \theta_t[\text{'n\_estimators'}]$
+    \State $depth \leftarrow \theta_t[\text{'max\_depth'}]$
+    \State $min\_split \leftarrow \theta_t[\text{'min\_samples\_split'}]$
+    
+    \State $score_t \leftarrow \text{Evaluate}(n\_est, depth, min\_split)$
+    \State $\mathcal{H} \leftarrow \mathcal{H} \cup \{(\theta_t, score_t)\}$ \Comment{Update the surrogate model with new observation}
+\EndFor
+
+\State \Return $\theta_{best} \in \mathcal{H}$ corresponding to $\max(score)$
+\end{algorithmic}
+\end{algorithm}
+
+\end{document}
