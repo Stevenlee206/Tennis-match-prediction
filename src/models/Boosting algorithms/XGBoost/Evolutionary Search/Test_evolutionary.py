@@ -1,4 +1,3 @@
-import pandas as pd
 from Evolutionary_tuning import XGBGeneticSearch
 from XGBoost.XGBoost_evaluate import Evaluator
 from XGBoost.XG_Boost_preprocess import XGBoost_preprossesor

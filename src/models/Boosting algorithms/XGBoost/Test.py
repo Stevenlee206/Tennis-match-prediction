@@ -1,5 +1,4 @@
 from XGBoost.XG_Boost_preprocess import XGBoost_preprossesor
-from xgboost import XGBClassifier
 from XGBoost.XGBoost_evaluate import Evaluator
 from XGBoost.XGBoost_final import XGBoost_final_train
 processor=XGBoost_preprossesor()
