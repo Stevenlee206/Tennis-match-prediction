@@ -62,7 +62,7 @@ def run_gmm_component_search(min_components=5, max_components=25):
         X_test_aug = X_test.copy()
 
         # Train GMM
-        gmm = GaussianMixture(n_components=k, covariance_type='full', random_state=42, n_init=5)
+        gmm = GaussianMixture(n_components=k, covariance_type='diag', random_state=42, n_init=5)
         gmm.fit(X_train_scaled)
         
         # Extract raw log-likelihoods (Mahalanobis variance)

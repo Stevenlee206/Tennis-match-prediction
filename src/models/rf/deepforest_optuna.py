@@ -126,13 +126,24 @@ def objective(trial, X_train, y_train, X_val, y_val, bounds, add_pca=False, vali
     # STRATEGY 2: WALK-FORWARD (TSCV)
     # ==========================================
     elif validation == "walk_forward":
-        # ---> UPDATED HERE <---
         tscv = TimeSeriesSplit(n_splits=n_splits, test_size=tscv_test_size)
         fold_accuracies = []
         
         for train_index, val_index in tscv.split(X_train):
-            X_t_cv, X_v_cv = X_train.iloc[train_index], X_train.iloc[val_index]
-            y_t_cv, y_v_cv = y_train.iloc[train_index], y_train.iloc[val_index]
+            # FIX: Use .copy() to prevent SettingWithCopyWarnings
+            X_t_cv = X_train.iloc[train_index].copy()
+            X_v_cv = X_train.iloc[val_index].copy()
+            y_t_cv = y_train.iloc[train_index].copy()
+            y_v_cv = y_train.iloc[val_index].copy()
+            
+            # ---> FILTERING LOGIC FOR AUGMENTED DATA <---
+            if 'is_augmented' in X_v_cv.columns:
+                val_mask = (X_v_cv['is_augmented'] == 0)
+                X_v_cv = X_v_cv[val_mask]
+                y_v_cv = y_v_cv[val_mask]
+                
+                X_t_cv = X_t_cv.drop(columns=['is_augmented'])
+                X_v_cv = X_v_cv.drop(columns=['is_augmented'])
             
             scaler = StandardScaler()
             X_t_scaled = scaler.fit_transform(X_t_cv)
@@ -174,8 +185,15 @@ def run_deepforest_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_
         return joblib.load(model_path), joblib.load(scaler_path)
 
     print("Scaling features for Deep Forest...")
+    
+    # ---> Protect scaler from the augmented metadata flag <---
+    if 'is_augmented' in X_train.columns:
+        X_train_features = X_train.drop(columns=['is_augmented'])
+    else:
+        X_train_features = X_train
+        
     scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
+    X_train_scaled = scaler.fit_transform(X_train_features)
     
     if add_pca:
         print("Applying PCA (Retaining 95% variance)...")
@@ -236,9 +254,11 @@ def run_deepforest_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_
     if add_pca:
         final_feature_names = [f"PC{i+1}" for i in range(X_train_processed.shape[1])]
     else:
-        final_feature_names = list(X_train.columns)
+        # Pull strictly from the filtered features dataframe
+        final_feature_names = list(X_train_features.columns)
         
     plot_feature_importance(final_clf, X_train_processed, y_train.values, final_feature_names, reports_dir)
+    
     # Save
     joblib.dump(final_clf, model_path)
     joblib.dump(scaler, scaler_path)

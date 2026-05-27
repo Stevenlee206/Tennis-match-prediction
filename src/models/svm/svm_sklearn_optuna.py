@@ -9,13 +9,12 @@ from pathlib import Path
 from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
-from sklearn.cluster import KMeans
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import accuracy_score
 
 def generate_sample_weights(X_raw, y_raw, strategy="none", base_weight=1.0):
     """
-    Dynamically calculates sample weights based on upset severity (matches RF logic).
+    Dynamically calculates sample weights based on upset severity.
     """
     n_samples = len(y_raw)
     weights = np.ones(n_samples)
@@ -44,9 +43,7 @@ def generate_sample_weights(X_raw, y_raw, strategy="none", base_weight=1.0):
 
     return weights
 
-
-# ---> ADDED c_min and c_max arguments
-def objective(trial, X_train, y_train, X_val, y_val, kernel, c_min=1e-3, c_max=1e2, add_pca=False, add_kmeans=False, n_clusters=5, validation="holdout", weight_strategy="none", upset_weight=1.0, n_splits=5, tscv_test_size=None):
+def objective(trial, X_train, y_train, X_val, y_val, kernel, c_min=1e-3, c_max=1e2, add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0, n_splits=5, tscv_test_size=None):
     c_param = trial.suggest_float("C", c_min, c_max, log=True)
     params = {"C": c_param, "kernel": kernel, "random_state": 42}
     
@@ -70,15 +67,11 @@ def objective(trial, X_train, y_train, X_val, y_val, kernel, c_min=1e-3, c_max=1
             X_v_processed = pca.transform(X_v_scaled)
         else:
             X_t_processed, X_v_processed = X_t_scaled, X_v_scaled
-        if add_kmeans:
-            kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto')
-            t_distances = kmeans.fit_transform(X_t_processed)
-            v_distances = kmeans.transform(X_v_processed)
-            X_t_processed = np.hstack((X_t_processed, t_distances))
-            X_v_processed = np.hstack((X_v_processed, v_distances))
+            
         weights = generate_sample_weights(X_train, y_train, weight_strategy, upset_weight)
         
-        clf = SVC(**params)
+        # Enable probability=True for scoring metrics
+        clf = SVC(**params, probability=True)
         clf.fit(X_t_processed, y_train, sample_weight=weights)
         val_preds = clf.predict(X_v_processed)
         
@@ -88,13 +81,24 @@ def objective(trial, X_train, y_train, X_val, y_val, kernel, c_min=1e-3, c_max=1
     # STRATEGY 2: WALK-FORWARD (TSCV)
     # ==========================================
     elif validation == "walk_forward":
-        # ---> UPDATED HERE <---
         tscv = TimeSeriesSplit(n_splits=n_splits, test_size=tscv_test_size)
         fold_accuracies = []
         
         for train_index, val_index in tscv.split(X_train):
-            X_t_cv, X_v_cv = X_train.iloc[train_index], X_train.iloc[val_index]
-            y_t_cv, y_v_cv = y_train.iloc[train_index], y_train.iloc[val_index]
+            # Use .copy() to prevent SettingWithCopyWarnings
+            X_t_cv = X_train.iloc[train_index].copy()
+            X_v_cv = X_train.iloc[val_index].copy()
+            y_t_cv = y_train.iloc[train_index].copy()
+            y_v_cv = y_train.iloc[val_index].copy()
+            
+            # ---> FILTERING LOGIC FOR AUGMENTED DATA <---
+            if 'is_augmented' in X_v_cv.columns:
+                val_mask = (X_v_cv['is_augmented'] == 0)
+                X_v_cv = X_v_cv[val_mask]
+                y_v_cv = y_v_cv[val_mask]
+                
+                X_t_cv = X_t_cv.drop(columns=['is_augmented'])
+                X_v_cv = X_v_cv.drop(columns=['is_augmented'])
             
             scaler = StandardScaler()
             X_t_scaled = scaler.fit_transform(X_t_cv)
@@ -106,15 +110,11 @@ def objective(trial, X_train, y_train, X_val, y_val, kernel, c_min=1e-3, c_max=1
                 X_v_processed = pca.transform(X_v_scaled)
             else:
                 X_t_processed, X_v_processed = X_t_scaled, X_v_scaled
-            if add_kmeans:
-                kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto')
-                t_distances = kmeans.fit_transform(X_t_processed)
-                v_distances = kmeans.transform(X_v_processed)
-                X_t_processed = np.hstack((X_t_processed, t_distances))
-                X_v_processed = np.hstack((X_v_processed, v_distances))  
+                
             weights_cv = generate_sample_weights(X_t_cv, y_t_cv, weight_strategy, upset_weight)
             
-            clf_cv = SVC(**params)
+            # Enable probability=True for scoring metrics
+            clf_cv = SVC(**params, probability=True)
             clf_cv.fit(X_t_processed, y_t_cv, sample_weight=weights_cv)
             val_preds = clf_cv.predict(X_v_processed)
             
@@ -155,8 +155,8 @@ def plot_feature_importance(clf, feature_names, save_path):
     plt.savefig(save_path / "feature_importance.png", dpi=300)
     plt.close()
 
-# ---> ADDED c_min and c_max arguments
-def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_trials=30, kernel="linear", c_min=1e-3, c_max=1e2, add_pca=False, add_kmeans=False, n_clusters=5, validation="holdout", weight_strategy="none", upset_weight=1.0, n_splits=5, tscv_test_size=None):
+
+def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_trials=30, kernel="linear", c_min=1e-3, c_max=1e2, add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0, n_splits=5, tscv_test_size=None):
     output_dir = Path(output_dir)
     reports_dir = Path(reports_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -170,8 +170,15 @@ def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_
         return joblib.load(model_path), joblib.load(scaler_path)
 
     print(f"Scaling features for SVM ({kernel.upper()})...")
+    
+    # Protect scaler from the augmented metadata flag
+    if 'is_augmented' in X_train.columns:
+        X_train_features = X_train.drop(columns=['is_augmented'])
+    else:
+        X_train_features = X_train
+        
     scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
+    X_train_scaled = scaler.fit_transform(X_train_features)
     
     if X_val is not None:
         X_val_scaled = scaler.transform(X_val)
@@ -191,18 +198,7 @@ def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_
         X_train_processed = X_train_scaled
         if X_val_scaled is not None:
             X_val_processed = X_val_scaled
-    if add_kmeans:
-        print(f"Applying KMeans clustering (k={n_clusters}) for SVM...")
-        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto')
-        t_distances = kmeans.fit_transform(X_train_processed)
-        X_train_processed = np.hstack((X_train_processed, t_distances))
-        
-        if X_val_scaled is not None:
-            v_distances = kmeans.transform(X_val_processed)
-            X_val_processed = np.hstack((X_val_processed, v_distances))
-            
-        kmeans_path = output_dir / f"{kernel}_kmeans.joblib"
-        joblib.dump(kmeans, kmeans_path)
+
     optuna.logging.set_verbosity(optuna.logging.INFO)
     db_path = output_dir / f"svm_{kernel}_optuna.db"
     storage_url = f"sqlite:///{db_path.absolute()}"
@@ -215,8 +211,7 @@ def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_
         direction="maximize"
     )
     study.optimize(
-        # UPDATE LAMBDA TO PASS KMEANS ARGS
-        lambda trial: objective(trial, X_train, y_train, X_val, y_val, kernel, c_min, c_max, add_pca, add_kmeans, n_clusters, validation, weight_strategy, upset_weight, n_splits, tscv_test_size),
+        lambda trial: objective(trial, X_train, y_train, X_val, y_val, kernel, c_min, c_max, add_pca, validation, weight_strategy, upset_weight, n_splits, tscv_test_size),
         n_trials=n_trials
     )
     
@@ -224,7 +219,8 @@ def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_
     print(f"\nBest parameters found: {best_params}")
     
     print("Training final model with optimal parameters...")
-    final_clf = SVC(**best_params, kernel=kernel, random_state=42)
+    # Enable probability=True for scoring metrics
+    final_clf = SVC(**best_params, kernel=kernel, random_state=42, probability=True)
     
     final_weights = generate_sample_weights(X_train, y_train, weight_strategy, upset_weight)
     final_clf.fit(X_train_processed, y_train, sample_weight=final_weights)
@@ -246,16 +242,11 @@ def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_
     joblib.dump(scaler, scaler_path)
     
     if add_pca:
-        # Subtract the KMeans columns to get the true number of Principal Components
-        n_pcs = X_train_processed.shape[1] - (n_clusters if add_kmeans else 0)
+        n_pcs = X_train_processed.shape[1]
         final_feature_names = [f"PC{i+1}" for i in range(n_pcs)]
     else:
-        final_feature_names = list(X_train.columns)
-        
-    # Append the new K-Means features to the name list so they match the coefficients
-    if add_kmeans:
-        kmeans_names = [f"KMeans_Dist_C{i+1}" for i in range(n_clusters)]
-        final_feature_names.extend(kmeans_names)
+        # Pull strictly from the filtered features dataframe
+        final_feature_names = list(X_train_features.columns)
 
     config = {
         "model_type": "C-SVM",
@@ -264,8 +255,6 @@ def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_
         "train_accuracy": train_acc,
         "val_accuracy": study.best_value,
         "pca_applied": add_pca,
-        "kmeans_applied": add_kmeans,  # <--- NEW
-        "n_clusters": n_clusters if add_kmeans else 0, # <--- NEW
         "weight_strategy": weight_strategy,
         "upset_weight": upset_weight,
         "features_used": final_feature_names

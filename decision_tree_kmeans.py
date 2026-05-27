@@ -5,7 +5,7 @@ import seaborn as sns
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import accuracy_score
 
 # Import your existing preprocessing pipeline
@@ -43,10 +43,12 @@ def run_kmeans_cluster_search(min_clusters=3, max_clusters=25):
 
     # --- Step 2: Calculate Baseline (No K-Means) ---
     print("\n-> Calculating Baseline Random Forest Accuracy...")
-    base_clf = RandomForestClassifier(
-        n_estimators=419, max_depth=18, min_samples_split=37, 
-        max_features='log2', random_state=42, n_jobs=-1
-    )
+    base_clf  = DecisionTreeClassifier(
+            max_depth=7,
+            min_samples_split=20,
+            min_samples_leaf=20,
+            max_features='sqrt',
+        )
     base_clf.fit(X_train, y_train)
     baseline_acc = accuracy_score(y_test, base_clf.predict(X_test)) * 100
     print(f"   Baseline Accuracy: {baseline_acc:.2f}%\n")
@@ -76,9 +78,11 @@ def run_kmeans_cluster_search(min_clusters=3, max_clusters=25):
             X_test_aug[col_name] = test_distances[:, i]
 
         # Train Augmented Random Forest
-        clf = RandomForestClassifier(
-            n_estimators=300, max_depth=15, min_samples_split=25, 
-            max_features='sqrt', random_state=42, n_jobs=-1
+        clf = DecisionTreeClassifier(
+            max_depth=7,
+            min_samples_split=20,
+            min_samples_leaf=20,
+            max_features='sqrt',
         )
         clf.fit(X_train_aug, y_train)
         
@@ -108,7 +112,7 @@ def run_kmeans_cluster_search(min_clusters=3, max_clusters=25):
     plt.axhline(y=baseline_acc, color='#e74c3c', linestyle='--', linewidth=2, label=f'Baseline RF ({baseline_acc:.2f}%)')
     
     # Aesthetics
-    plt.title('Random Forest Accuracy vs. K-Means Geometric Sub-Archetypes', fontsize=16, pad=15)
+    plt.title('Decision Tree Accuracy vs. K-Means Geometric Sub-Archetypes', fontsize=16, pad=15)
     plt.xlabel('Number of K-Means Clusters (k)', fontsize=12)
     plt.ylabel('Test Set Accuracy (%)', fontsize=12)
     plt.xticks(range(min_clusters, max_clusters + 1))
@@ -123,8 +127,8 @@ def run_kmeans_cluster_search(min_clusters=3, max_clusters=25):
                  fontsize=10, ha='center')
 
     plt.tight_layout()
-    plt.savefig('rf_kmeans_cluster_search.png', dpi=300)
-    print("-> Graph saved successfully as 'kmeans_cluster_search.png'!")
+    plt.savefig('decision_trees_kmeans.png', dpi=300)
+    print("-> Graph saved successfully as 'decision_trees_kmeans.png'!")
     
     # Display the plot if running in an interactive environment
     plt.show()

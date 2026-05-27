@@ -55,7 +55,7 @@ def run_logreg_gmm_search(min_components=3, max_components=25):
         print(f"Evaluating GMM with k={k} components...", end=" ")
         
         # Train GMM
-        gmm = GaussianMixture(n_components=k, covariance_type='full', random_state=42, n_init=5)
+        gmm = GaussianMixture(n_components=k, covariance_type='diag', random_state=42, n_init=5)
         gmm.fit(X_train_scaled)
         
         # Extract raw log-likelihoods (Mahalanobis variance proxy)

@@ -5,9 +5,8 @@ from src.preprocessing.preprocessing import Preprocessing
 import joblib
 import json
 import numpy as np
-from sklearn.metrics import accuracy_score, classification_report
-
-def evaluate_model_bias(y_true, y_pred, X_raw):
+from sklearn.metrics import accuracy_score, classification_report, matthews_corrcoef, brier_score_loss, roc_auc_score
+def evaluate_model_bias(y_true, y_pred, X_raw, y_prob=None):
     """
     Calculates bias metrics and returns them as a dictionary for JSON logging.
     """
@@ -55,6 +54,31 @@ def evaluate_model_bias(y_true, y_pred, X_raw):
     final_acc = accuracy_score(y_true, y_pred) * 100
     metrics['final_accuracy'] = round(final_acc, 2)
     print(f"\nFinal Set Accuracy:        {final_acc:.2f}%")
+    
+    # 4. Matthews Correlation Coefficient (MCC)
+    mcc = matthews_corrcoef(y_true, y_pred)
+    metrics['mcc'] = round(mcc, 4)
+    print(f"Matthews Corr. Coef (MCC): {mcc:.4f} (Range: -1 to 1)")
+    
+    # 5. Probabilistic Metrics (Requires y_prob)
+    if y_prob is not None:
+        # Brier Score
+        brier = brier_score_loss(y_true, y_prob)
+        metrics['brier_score'] = round(brier, 4)
+        print(f"Brier Score:               {brier:.4f} (Lower is better, closer to 0)")
+        
+        # ROC-AUC Score
+        try:
+            roc_auc = roc_auc_score(y_true, y_prob)
+            metrics['roc_auc'] = round(roc_auc, 4)
+            print(f"ROC-AUC Score:             {roc_auc:.4f} (Higher is better, 0.5 is random)")
+        except ValueError:
+            # Handles rare edge case where a tiny CV fold might only contain one class
+            print("ROC-AUC Score:             [Skipped - Only one class present in y_true]")
+    else:
+        print("Brier Score:               [Skipped - y_prob not provided]")
+        print("ROC-AUC Score:             [Skipped - y_prob not provided]")
+
     print("==================================================\n")
     
     return metrics
@@ -85,7 +109,8 @@ def main():
     parser.add_argument("--batch_size", type=int, default=64, help="Batch size for PyTorch DataLoaders")
     parser.add_argument("--rf_variant", type=str, choices=["rf", "extra_trees", "rrf", "rotation_forest", "oblique", "weighted"], default="rf", help="Specific RF variant (for Optuna)")
     parser.add_argument("--add_kmeans", action="store_true", help="Apply KMeans clustering to add spatial features")
-    parser.add_argument("--n_clusters", type=int, default=5, help="Number of clusters if using --add_kmeans")
+    parser.add_argument("--n_clusters_min", type=int, default=2, help="Minimum clusters for Optuna to test")
+    parser.add_argument("--n_clusters_max", type=int, default=10, help="Maximum clusters for Optuna to test")
     parser.add_argument("--add_pca", action="store_true", help="Apply PCA for dimensionality reduction and denoising before passing to model")
     parser.add_argument("--mode", type=str, choices=["standard", "sgd"], default="standard")
     parser.add_argument("--optimizer", type=str, choices=["optuna", "pso", "ga", "grid"], default="optuna", help="Optimizer to tune hyperparameters")
@@ -247,18 +272,17 @@ def main():
                 if args.mode == "standard":
                     run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, 
                                  n_trials=args.n_trials, kernel=args.kernel, c_min=args.c_min, c_max=args.c_max,                         
-                                 add_pca=args.add_pca, validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight, add_kmeans=args.add_kmeans, n_clusters=args.n_clusters)
+                                 add_pca=args.add_pca, validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight)
                 elif args.mode == "sgd":
                     run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, 
                                  n_trials=args.n_trials, n_epochs=args.epochs, kernel="linear", c_min=args.c_min, c_max=args.c_max,                        
-                                 add_pca=args.add_pca, add_kmeans=args.add_kmeans, n_clusters=args.n_clusters, # <--- ADDED KMEANS ARGS
-                                 validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight, lr_schedule=args.lr_schedule)
+                                 add_pca=args.add_pca, validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight, lr_schedule=args.lr_schedule)
         
         elif args.model == "pytorch_svm":
             run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, 
                          n_trials=args.n_trials, epochs=args.epochs, batch_size=args.batch_size, c_min=args.c_min, c_max=args.c_max,                         
                          add_pca=args.add_pca, validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight,
-                         torch_opt=args.torch_opt, torch_sched=args.torch_sched, add_kmeans=args.add_kmeans, n_clusters=args.n_clusters)
+                         torch_opt=args.torch_opt, torch_sched=args.torch_sched)
         elif args.model == "pytorch_mlp":
             run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, 
                          n_trials=args.n_trials, epochs=args.epochs, batch_size=args.batch_size, 
@@ -287,7 +311,7 @@ def main():
                 run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, 
                          n_trials=args.n_trials, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, 
                          depth_min=args.rf_depth_min, depth_max=args.rf_depth_max, variant=args.rf_variant,
-                         add_pca=args.add_pca, add_kmeans=args.add_kmeans, n_clusters=args.n_clusters, # <--- NEW
+                         add_pca=args.add_pca, add_kmeans=args.add_kmeans, n_clusters_min=args.n_clusters_min, n_clusters_max=args.n_clusters_max,
                          validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight)
 
         print("\n--- Training and Tuning Complete ---")
@@ -321,17 +345,17 @@ def main():
             scaler = joblib.load(scaler_path)
             X_val_scaled = scaler.transform(X_val)
             
-            # Handle PCA if enabled
-            if hasattr(args, 'add_pca') and args.add_pca:
+            # ---> NEW: Load the model's actual config to dictate architecture
+            with open(config_path, 'r') as f:
+                cfg = json.load(f)
+                
+            # Handle PCA if enabled IN THE SAVED MODEL
+            if cfg.get('pca_applied', False):
                 if args.model in ["pytorch_svm", "pytorch_mlp", "tabnet", "deepforest"]:
-                    # Flips 'pytorch_svm' -> 'svm_pytorch' and 'pytorch_mlp' -> 'mlp_pytorch'
                     prefix = args.model.replace('pytorch_', '') + '_pytorch' if 'pytorch' in args.model else args.model
                     pca_name = f"{prefix}_pca.joblib"
                 elif args.model == "svm":
-                    if args.mode == "sgd":
-                        pca_name = "svm_sgd_pca.joblib"
-                    else:
-                        pca_name = f"{args.kernel}_pca.joblib"
+                    pca_name = "svm_sgd_pca.joblib" if args.mode == "sgd" else f"{args.kernel}_pca.joblib"
                 else:
                     pca_name = f"{args.rf_variant}_pca.joblib"
                     
@@ -341,8 +365,9 @@ def main():
                     X_val_scaled = pca.transform(X_val_scaled)
                 else:
                     print(f"⚠️ Warning: PCA enabled but {pca_name} not found at {pca_path}!")
-            if hasattr(args, 'add_kmeans') and args.add_kmeans:
-                # ---> DYNAMIC KMEANS NAMING ADDED HERE <---
+
+            # Handle KMeans if enabled IN THE SAVED MODEL
+            if cfg.get('kmeans_applied', False):
                 if args.model in ["pytorch_svm", "pytorch_mlp", "tabnet", "deepforest"]:
                     prefix = args.model.replace('pytorch_', '') + '_pytorch' if 'pytorch' in args.model else args.model
                     kmeans_name = f"{prefix}_kmeans.joblib"
@@ -351,9 +376,7 @@ def main():
                 else:
                     kmeans_name = f"{args.rf_variant}_kmeans.joblib"
                 
-                # Use BASE_OUT for holdout, global_out for walk-forward
-                current_out_dir = BASE_OUT if args.validation == "holdout" else global_out 
-                kmeans_path = current_out_dir / kmeans_name
+                kmeans_path = BASE_OUT / kmeans_name
                 
                 if kmeans_path.exists():
                     kmeans = joblib.load(kmeans_path)
@@ -361,7 +384,6 @@ def main():
                     X_val_scaled = np.hstack((X_val_scaled, v_distances))
                 else:
                     print(f"⚠️ Warning: KMeans enabled but {kmeans_name} not found at {kmeans_path}!")
-            # Properly Route Model Loading & Prediction
             if args.model == "pytorch_svm":
                 import torch
                 from src.models.svm.svm_pytorch_optuna import PyTorchLinearSVM
@@ -371,7 +393,9 @@ def main():
                 best_model.eval()
                 with torch.no_grad():
                     preds_raw = best_model(torch.FloatTensor(X_val_scaled).to(device))
-                    y_pred_val = (preds_raw > 0).cpu().numpy().astype(int)  
+                    # ---> FIX: Flatten the predictions and extract y_prob_val
+                    y_pred_val = (preds_raw > 0).cpu().numpy().astype(int).flatten()
+                    y_prob_val = torch.sigmoid(preds_raw).cpu().numpy().flatten()  
             elif args.model == "pytorch_mlp":
                 import torch
                 from src.models.mlp.mlp_pytorch_optuna import TimeSeriesTennisNet, TimeSeriesTennisDataset
@@ -391,15 +415,25 @@ def main():
                 
                 y_pred_val = []
                 
+                y_pred_val = []
+                y_prob_val = [] # Add a list to store probabilities
+
                 with torch.no_grad():
                     for batch_X, batch_y, _ in val_loader:
                         batch_X = batch_X.to(device)
                         preds_raw = best_model(batch_X)
-                        # MLP outputs logits. Sigmoid > 0.5 gets the binary class
-                        preds_binary = (torch.sigmoid(preds_raw) > 0.5).cpu().numpy().astype(int).flatten()
+        
+                    # Calculate raw probabilities using sigmoid
+                        probs = torch.sigmoid(preds_raw).cpu().numpy().flatten()
+                        preds_binary = (probs > 0.5).astype(int)
+        
                         y_pred_val.extend(preds_binary)
-                        
+                        y_prob_val.extend(probs) # Store the probabilities
+
                 y_pred_val = np.array(y_pred_val)
+                y_prob_val = np.array(y_prob_val) # Convert to numpy array
+                        
+                
                 
                 # Because window_size=5, the dataset drops the first 4 matches. 
                 # We must truncate the evaluation data to match!
@@ -408,9 +442,11 @@ def main():
             else: # SKLearn / DeepForest models
                 best_model = joblib.load(model_path)
                 y_pred_val = best_model.predict(X_val_scaled)
-            
-            # Evaluate and Append to JSON
-            bias_metrics = evaluate_model_bias(y_val.values, y_pred_val, X_val)
+                # MISSING: Extract probabilities for the holdout evaluation
+                y_prob_val = best_model.predict_proba(X_val_scaled)[:, 1] if hasattr(best_model, "predict_proba") else None
+        
+                # MISSING: Pass y_prob_val to the function
+            bias_metrics = evaluate_model_bias(y_val.values, y_pred_val, X_val, y_prob=y_prob_val)
             append_metrics_to_config(config_path, bias_metrics)
         else:
             print(f"Could not find saved models in {BASE_OUT} for evaluation.")
@@ -420,10 +456,7 @@ def main():
         print(f" RUNNING GLOBAL TIME-SERIES CV ({args.n_splits} SPLITS)")
         print(f" Target Test Size per Fold: {tscv_test_size}")
         print("="*50)
-
-        if 'is_augmented' in X_train_val_pool.columns:
-            X_train_val_pool = X_train_val_pool.drop(columns=['is_augmented'])
-            
+           
         global_out = BASE_OUT / f"global_tscv_{args.model}"
         global_rep = BASE_REP / f"global_tscv_{args.model}"
 
@@ -434,12 +467,11 @@ def main():
                     run_pipeline(X_train_val_pool, y_train_val_pool, None, None, global_out, global_rep, 
                                  n_trials=args.n_trials, kernel=args.kernel, c_min=args.c_min, c_max=args.c_max,                         
                                  add_pca=args.add_pca, validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight,
-                                 n_splits=args.n_splits, tscv_test_size=tscv_test_size, add_kmeans=args.add_kmeans, n_clusters=args.n_clusters) # <-- NEW
+                                 n_splits=args.n_splits, tscv_test_size=tscv_test_size) # <-- NEW
                 elif args.mode == "sgd":
                     run_pipeline(X_train_val_pool, y_train_val_pool, None, None, global_out, global_rep, 
                                  n_trials=args.n_trials, n_epochs=args.epochs, kernel="linear", c_min=args.c_min, c_max=args.c_max,                        
-                                 add_pca=args.add_pca, add_kmeans=args.add_kmeans, n_clusters=args.n_clusters, # <--- ADDED KMEANS ARGS
-                                 validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight, lr_schedule=args.lr_schedule,
+                                 add_pca=args.add_pca, validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight, lr_schedule=args.lr_schedule,
                                  n_splits=args.n_splits, tscv_test_size=tscv_test_size)
         
         elif args.model == "pytorch_svm":
@@ -447,7 +479,7 @@ def main():
                          n_trials=args.n_trials, epochs=args.epochs, batch_size=args.batch_size, c_min=args.c_min, c_max=args.c_max,                         
                          add_pca=args.add_pca, validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight,
                          torch_opt=args.torch_opt, torch_sched=args.torch_sched,
-                         n_splits=args.n_splits, tscv_test_size=tscv_test_size, add_kmeans=args.add_kmeans, n_clusters=args.n_clusters) # <-- NEW
+                         n_splits=args.n_splits, tscv_test_size=tscv_test_size) # <-- NEW
                          
         elif args.model == "deepforest":
             run_pipeline(X_train_val_pool, y_train_val_pool, None, None, global_out, global_rep, 
@@ -476,7 +508,7 @@ def main():
             run_pipeline(X_train_val_pool, y_train_val_pool, None, None, global_out, global_rep, 
                          n_trials=args.n_trials, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, 
                          depth_min=args.rf_depth_min, depth_max=args.rf_depth_max, variant=args.rf_variant,
-                         add_pca=args.add_pca, add_kmeans=args.add_kmeans, n_clusters=args.n_clusters,
+                         add_pca=args.add_pca, add_kmeans=args.add_kmeans, n_clusters_min=args.n_clusters_min, n_clusters_max=args.n_clusters_max,
                          validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight,
                          n_splits=args.n_splits, tscv_test_size=tscv_test_size) # <--- ALSO ADDED TSCV ARGS
         # ==========================================
@@ -516,7 +548,11 @@ def main():
             
             X_test_scaled = scaler.transform(X_test_eval)
             
-            if hasattr(args, 'add_pca') and args.add_pca:
+            # ---> NEW: Load the model's actual config to dictate architecture
+            with open(config_path, 'r') as f:
+                cfg = json.load(f)
+                
+            if cfg.get('pca_applied', False):
                 if args.model in ["pytorch_svm", "pytorch_mlp", "tabnet", "deepforest"]:
                     prefix = args.model.replace('pytorch_', '') + '_pytorch' if 'pytorch' in args.model else args.model
                     pca_name = f"{prefix}_pca.joblib"
@@ -529,8 +565,8 @@ def main():
                 if pca_path.exists():
                     pca = joblib.load(pca_path)
                     X_test_scaled = pca.transform(X_test_scaled) 
-            if hasattr(args, 'add_kmeans') and args.add_kmeans:
-                # ---> DYNAMIC KMEANS NAMING ADDED HERE <---
+                    
+            if cfg.get('kmeans_applied', False):
                 if args.model in ["pytorch_svm", "pytorch_mlp", "tabnet", "deepforest"]:
                     prefix = args.model.replace('pytorch_', '') + '_pytorch' if 'pytorch' in args.model else args.model
                     kmeans_name = f"{prefix}_kmeans.joblib"
@@ -539,13 +575,10 @@ def main():
                 else:
                     kmeans_name = f"{args.rf_variant}_kmeans.joblib"
                 
-                # Use BASE_OUT for holdout, global_out for walk-forward
-                current_out_dir = BASE_OUT if args.validation == "holdout" else global_out 
-                kmeans_path = current_out_dir / kmeans_name
+                kmeans_path = global_out / kmeans_name
                 
                 if kmeans_path.exists():
                     kmeans = joblib.load(kmeans_path)
-                    # Correctly transforming X_test_scaled for Chunk 7
                     v_distances = kmeans.transform(X_test_scaled) 
                     X_test_scaled = np.hstack((X_test_scaled, v_distances))
                 else:
@@ -559,46 +592,55 @@ def main():
                 best_model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
                 best_model.eval()
                 with torch.no_grad():
-                    preds_raw = best_model(torch.FloatTensor(X_test_scaled).to(device)) 
-                    y_pred_eval = (preds_raw > 0).cpu().numpy().astype(int)
+                    
+                # FIX 1: Change X_val_scaled to X_test_scaled
+                    preds_raw = best_model(torch.FloatTensor(X_test_scaled).to(device))
+                    y_pred_val = (preds_raw > 0).cpu().numpy().astype(int).flatten()
+                    y_prob_val = torch.sigmoid(preds_raw).cpu().numpy().flatten()
                     
             elif args.model == "pytorch_mlp":
                 import torch
                 from src.models.mlp.mlp_pytorch_optuna import TimeSeriesTennisNet, TimeSeriesTennisDataset
                 from torch.utils.data import DataLoader
                 
-                device = "cuda" if torch.cuda.is_available() else "cpu"
-                with open(config_path, 'r') as f:
-                    cfg = json.load(f)
-                    
+                device = "cuda" if torch.cuda.is_available() else "cpu"                    
                 best_model = TimeSeriesTennisNet(X_test_scaled.shape[1], cfg['hidden_dim']).to(device)
                 best_model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
                 best_model.eval()
                 
                 test_dataset = TimeSeriesTennisDataset(X_test_scaled, y_test_eval.values, window_size=5)
                 test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
-                
-                y_pred_eval = []
+            
+                y_pred_val = []
+                y_prob_val = []
+
                 with torch.no_grad():
-                    for batch_X, batch_y, _ in test_loader:
+                # FIX 2: Loop over test_loader, not val_loader
+                    for batch_X, batch_y, _ in test_loader: 
                         batch_X = batch_X.to(device)
                         preds_raw = best_model(batch_X)
-                        preds_binary = (torch.sigmoid(preds_raw) > 0.5).cpu().numpy().astype(int).flatten()
-                        y_pred_eval.extend(preds_binary)
-                        
-                y_pred_eval = np.array(y_pred_eval)
-                
-                # Truncate evaluation data to match dropped window matches
+                    
+                        probs = torch.sigmoid(preds_raw).cpu().numpy().flatten()
+                        preds_binary = (probs > 0.5).astype(int)
+                        y_pred_val.extend(preds_binary)
+                        y_prob_val.extend(probs)
+                    
+                y_pred_val = np.array(y_pred_val)
+                y_prob_val = np.array(y_prob_val)
+            
                 y_test_eval = y_test_eval.iloc[4:]
                 X_test_eval = X_test_eval.iloc[4:]
-                
+            
             else: # SKLearn / DeepForest / TabNet
                 best_model = joblib.load(model_path)
-                y_pred_eval = best_model.predict(X_test_scaled) 
-            
-            # Evaluate and append
-            bias_metrics = evaluate_model_bias(y_test_eval.values, y_pred_eval, X_test_eval) 
+                # FIX 3: Change X_val_scaled to X_test_scaled
+                y_pred_val = best_model.predict(X_test_scaled)
+                y_prob_val = best_model.predict_proba(X_test_scaled)[:, 1]
+
+                # FIX 4: Pass the TEST targets and features to evaluate_model_bias, not y_val/X_val!
+            bias_metrics = evaluate_model_bias(y_test_eval.values, y_pred_val, X_test_eval, y_prob=y_prob_val)
             append_metrics_to_config(config_path, bias_metrics)
+
         else:
             print(f"Could not find saved models in {global_out} for evaluation.")
 

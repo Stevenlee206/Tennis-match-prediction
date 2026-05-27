@@ -4,18 +4,21 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
 from sklearn.mixture import GaussianMixture
-from sklearn.svm import LinearSVC
+
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import accuracy_score
+
 # Import your existing preprocessing pipeline
 from src.preprocessing.preprocessing import Preprocessing
 
-def run_svm_gmm_search(min_components=3, max_components=25):
-    print(f"\n{'='*70}")
-    print(f" AUTOMATED GMM LOG-LIKELIHOOD + LINEAR SVM SEARCH ({min_components} to {max_components})")
-    print(f"{'='*70}")
+def run_kmeans_cluster_search(min_clusters=3, max_clusters=25):
+    print(f"\n{'='*65}")
+    print(f" AUTOMATED K-MEANS CLUSTER SEARCH ({min_clusters} to {max_clusters})")
+    print(f"{'='*65}")
 
-    # --- Step 1: Data Preparation ---
+    # --- Step 1: Data Preparation (Done once) ---
     print("-> Preprocessing and Splitting Data...")
     prep = Preprocessing()
     data = prep.run(train_ratio=0.90)
@@ -35,44 +38,53 @@ def run_svm_gmm_search(min_components=3, max_components=25):
         X_test = X_test[X_test['is_augmented'] == 0].drop(columns=['is_augmented'])
         X_train = X_train.drop(columns=['is_augmented'], errors='ignore')
 
-    # Scale the base features (Mandatory for both GMM and SVM)
-    base_scaler = StandardScaler()
-    X_train_scaled = base_scaler.fit_transform(X_train)
-    X_test_scaled = base_scaler.transform(X_test)
+    # Scaling is absolutely mandatory for K-Means Euclidean distance calculation
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
 
-    # --- Step 2: Calculate Baseline (Pure Linear SVM) ---
-    print("\n-> Calculating Baseline LinearSVC Accuracy...")
-    base_clf = LinearSVC(dual=False, random_state=42, max_iter=10000)
-    base_clf.fit(X_train_scaled, y_train)
-    baseline_acc = accuracy_score(y_test, base_clf.predict(X_test_scaled)) * 100
+    # --- Step 2: Calculate Baseline (No K-Means) ---
+    print("\n-> Calculating Baseline Random Forest Accuracy...")
+    base_clf  = DecisionTreeClassifier(
+            max_depth=7,
+            min_samples_split=20,
+            min_samples_leaf=20,
+            max_features='sqrt',
+        )
+    base_clf.fit(X_train, y_train)
+    baseline_acc = accuracy_score(y_test, base_clf.predict(X_test)) * 100
     print(f"   Baseline Accuracy: {baseline_acc:.2f}%\n")
 
-    # --- Step 3: Iterate through Component Counts ---
+    # --- Step 3: Iterate through Cluster Counts ---
     results = []
     
-    for k in range(min_components, max_components + 1):
+    for k in range(min_clusters, max_clusters + 1):
         print(f"Evaluating GMM with k={k} components...", end=" ")
         
-        # Train GMM on the scaled training features
+        # Train GMM
         gmm = GaussianMixture(n_components=k, covariance_type='diag', random_state=42, n_init=5)
         gmm.fit(X_train_scaled)
         
-        # Extract raw log-likelihoods (Unbounded Mahalanobis variance proxy)
+        # Extract raw log-likelihoods (Mahalanobis variance proxy)
         train_log_probs = gmm._estimate_log_prob(X_train_scaled)
         test_log_probs = gmm._estimate_log_prob(X_test_scaled)
 
-        # SCALING IS CRITICAL HERE: Log-likelihoods can be massive negative numbers.
-        # If we don't scale them, they will dominate the SVM's regularization penalty.
+        # SCALING IS CRITICAL: Prevent log-likelihoods from dominating the L2 penalty
         ll_scaler = StandardScaler()
         train_ll_scaled = ll_scaler.fit_transform(train_log_probs)
         test_ll_scaled = ll_scaler.transform(test_log_probs)
 
-        # Horizontally stack the base scaled features with the new scaled log-likelihoods
+        # Horizontally stack features
         X_train_aug = np.hstack((X_train_scaled, train_ll_scaled))
         X_test_aug = np.hstack((X_test_scaled, test_ll_scaled))
 
-        # Train Augmented Linear SVM
-        clf = LinearSVC(dual=False, random_state=42, max_iter=10000)
+        # Train Augmented Random Forest
+        clf = DecisionTreeClassifier(
+            max_depth=7,
+            min_samples_split=20,
+            min_samples_leaf=20,
+            max_features='sqrt',
+        )
         clf.fit(X_train_aug, y_train)
         
         # Evaluate
@@ -87,6 +99,7 @@ def run_svm_gmm_search(min_components=3, max_components=25):
     # --- Step 4: Generate the Line Graph ---
     print("\n-> Generating Accuracy Graph...")
     
+    # Unpack results
     k_values = [r[0] for r in results]
     accuracies = [r[1] for r in results]
 
@@ -94,16 +107,16 @@ def run_svm_gmm_search(min_components=3, max_components=25):
     sns.set_style("whitegrid")
     
     # Plot the augmented accuracies
-    plt.plot(k_values, accuracies, marker='^', linewidth=2, markersize=8, color='#27ae60', label='LinearSVC + GMM Log-Likelihoods')
+    plt.plot(k_values, accuracies, marker='s', linewidth=2, markersize=8, color='#2980b9', label='RF + K-Means Centroid Distances')
     
     # Plot the baseline
-    plt.axhline(y=baseline_acc, color='#e74c3c', linestyle='--', linewidth=2, label=f'Baseline LinearSVC ({baseline_acc:.2f}%)')
+    plt.axhline(y=baseline_acc, color='#e74c3c', linestyle='--', linewidth=2, label=f'Baseline RF ({baseline_acc:.2f}%)')
     
     # Aesthetics
-    plt.title('Linear SVM Accuracy vs. GMM Probabilistic Augmentation', fontsize=16, pad=15)
-    plt.xlabel('Number of GMM Components (k)', fontsize=12)
+    plt.title('Decision Tree Accuracy vs. GMM Geometric Sub-Archetypes', fontsize=16, pad=15)
+    plt.xlabel('Number of GMM Clusters (k)', fontsize=12)
     plt.ylabel('Test Set Accuracy (%)', fontsize=12)
-    plt.xticks(range(min_components, max_components + 1))
+    plt.xticks(range(min_clusters, max_clusters + 1))
     plt.legend(fontsize=12)
     
     # Annotate the peak
@@ -115,10 +128,11 @@ def run_svm_gmm_search(min_components=3, max_components=25):
                  fontsize=10, ha='center')
 
     plt.tight_layout()
-    plt.savefig('svm_gmm_search.png', dpi=300)
-    print("-> Graph saved successfully as 'svm_gmm_search.png'!")
+    plt.savefig('decision_trees_gmm.png', dpi=300)
+    print("-> Graph saved successfully as 'decision_trees_gmm.png'!")
     
+    # Display the plot if running in an interactive environment
     plt.show()
 
 if __name__ == "__main__":
-    run_svm_gmm_search(min_components=3, max_components=25)
+    run_kmeans_cluster_search(min_clusters=3, max_clusters=25)

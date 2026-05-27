@@ -185,7 +185,7 @@ def generate_sample_weights(X_raw, y_raw, strategy="none", base_weight=1.0):
 
     return weights
 # ---> ADDED add_pca ARGUMENT
-def objective(trial, X_train, y_train, X_val, y_val, n_est_min, n_est_max, depth_min, depth_max, variant="rf", add_pca=False, add_kmeans=False, n_clusters=5, validation="holdout", weight_strategy="none", upset_weight=1.0, n_splits=5, tscv_test_size=None):
+def objective(trial, X_train, y_train, X_val, y_val, n_est_min, n_est_max, depth_min, depth_max, variant="rf", add_pca=False, add_kmeans=False, n_clusters_min=2, n_clusters_max=10, validation="holdout", weight_strategy="none", upset_weight=1.0, n_splits=5, tscv_test_size=None):
     params = {
         "n_estimators": trial.suggest_int("n_estimators", n_est_min, n_est_max),
         "max_depth": trial.suggest_int("max_depth", depth_min, depth_max),
@@ -198,7 +198,8 @@ def objective(trial, X_train, y_train, X_val, y_val, n_est_min, n_est_max, depth
         
         "random_state": 42,
     }
-    
+    if add_kmeans:
+        current_k = trial.suggest_int("n_clusters", n_clusters_min, n_clusters_max)
     if variant == "extra_trees":
         params["n_jobs"] = -1
         clf = ExtraTreesClassifier(**params)
@@ -238,11 +239,11 @@ def objective(trial, X_train, y_train, X_val, y_val, n_est_min, n_est_max, depth
         else:
             X_t_processed, X_v_processed = X_t_scaled, X_v_scaled
         if add_kmeans:
-            kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto')
+            kmeans = KMeans(n_clusters=current_k, random_state=42, n_init='auto')
             t_distances = kmeans.fit_transform(X_t_processed)
             v_distances = kmeans.transform(X_v_processed)
             X_t_processed = np.hstack((X_t_processed, t_distances))
-            X_v_processed = np.hstack((X_v_processed, v_distances)) 
+            X_v_processed = np.hstack((X_v_processed, v_distances))
         weights = generate_sample_weights(X_train, y_train, weight_strategy, upset_weight)
         
         with parallel_backend("threading"):
@@ -252,41 +253,56 @@ def objective(trial, X_train, y_train, X_val, y_val, n_est_min, n_est_max, depth
                 clf.fit(X_t_processed, y_train, sample_weight=weights)
             val_preds = clf.predict(X_v_processed)
             
-        return accuracy_score(y_val, val_preds)
-        
-    
+        return accuracy_score(y_val, val_preds)   
 
     # ==========================================
     # STRATEGY 2: WALK-FORWARD (TSCV)
     # ==========================================
     elif validation == "walk_forward":
-        # ---> UPDATED HERE <---
         tscv = TimeSeriesSplit(n_splits=n_splits, test_size=tscv_test_size)
         fold_accuracies = []
         
         for train_index, val_index in tscv.split(X_train):
-            X_t_cv, X_v_cv = X_train.iloc[train_index], X_train.iloc[val_index]
-            y_t_cv, y_v_cv = y_train.iloc[train_index], y_train.iloc[val_index]
+            # Use .copy() to prevent SettingWithCopyWarnings when dropping columns
+            X_t_cv = X_train.iloc[train_index].copy()
+            X_v_cv = X_train.iloc[val_index].copy()
+            y_t_cv = y_train.iloc[train_index].copy()
+            y_v_cv = y_train.iloc[val_index].copy()
+            
+            # ---> NEW: FILTERING LOGIC <---
+            if 'is_augmented' in X_v_cv.columns:
+                # 1. Filter Validation fold to keep strictly real matches
+                val_mask = (X_v_cv['is_augmented'] == 0)
+                X_v_cv = X_v_cv[val_mask]
+                y_v_cv = y_v_cv[val_mask]
+                
+                # 2. Drop the flag from BOTH folds so it is not used as a predictive feature
+                X_t_cv = X_t_cv.drop(columns=['is_augmented'])
+                X_v_cv = X_v_cv.drop(columns=['is_augmented'])
             
             scaler = StandardScaler()
             X_t_scaled = scaler.fit_transform(X_t_cv)
             X_v_scaled = scaler.transform(X_v_cv)
             
+            # ---> APPLY PCA/KMEANS INSIDE THE FOLD <---
             if add_pca:
                 pca = PCA(n_components=0.95, random_state=42)
                 X_t_processed = pca.fit_transform(X_t_scaled)
                 X_v_processed = pca.transform(X_v_scaled)
             else:
-                X_t_processed, X_v_processed = X_t_scaled, X_v_scaled
+                X_t_processed = X_t_scaled
+                X_v_processed = X_v_scaled
+
             if add_kmeans:
-                kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto')
+                kmeans = KMeans(n_clusters=current_k, random_state=42, n_init='auto')
                 t_distances = kmeans.fit_transform(X_t_processed)
                 v_distances = kmeans.transform(X_v_processed)
                 X_t_processed = np.hstack((X_t_processed, t_distances))
-                X_v_processed = np.hstack((X_v_processed, v_distances))  
+                X_v_processed = np.hstack((X_v_processed, v_distances))
+        
             # ---> GENERATE AND APPLY WEIGHTS FOR THIS FOLD
             weights_cv = generate_sample_weights(X_t_cv, y_t_cv, weight_strategy, upset_weight)
-            
+        
             with parallel_backend("threading"):
                 if variant == "rotation_forest":
                     clf.fit(X_t_processed, y_t_cv)
@@ -335,7 +351,8 @@ def plot_feature_importance(clf, feature_names, save_path, variant):
 # ---> ADDED add_pca ARGUMENT
 def run_rf_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, 
                     n_trials=30, n_est_min=50, n_est_max=500, depth_min=5, depth_max=50, 
-                    variant="rf", add_pca=False, add_kmeans=False, n_clusters=5, validation="holdout", weight_strategy="none", upset_weight=1.0, n_splits=3, tscv_test_size=None):
+                    variant="rf", add_pca=False, add_kmeans=False, n_clusters_min=2, n_clusters_max=10, 
+                    validation="holdout", weight_strategy="none", upset_weight=1.0, n_splits=3, tscv_test_size=None):
     output_dir = Path(output_dir)
     reports_dir = Path(reports_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -345,8 +362,15 @@ def run_rf_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
     scaler_path = output_dir / f"{variant}_scaler.joblib"
 
     print(f"Scaling features for {variant.upper()}...")
+    
+    # ---> NEW: Protect features from the augmented metadata flag
+    if 'is_augmented' in X_train.columns:
+        X_train_features = X_train.drop(columns=['is_augmented'])
+    else:
+        X_train_features = X_train
+        
     scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
+    X_train_scaled = scaler.fit_transform(X_train_features)
     
     # 1. Safely handle Walk-Forward 'None'
     if X_val is not None:
@@ -368,18 +392,7 @@ def run_rf_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
         X_train_processed = X_train_scaled
         if X_val_scaled is not None:
             X_val_processed = X_val_scaled
-    if add_kmeans:
-        print(f"Applying KMeans clustering (k={n_clusters}) for {variant.upper()}...")
-        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto')
-        t_distances = kmeans.fit_transform(X_train_processed)
-        X_train_processed = np.hstack((X_train_processed, t_distances))
-        
-        if X_val_scaled is not None:
-            v_distances = kmeans.transform(X_val_processed)
-            X_val_processed = np.hstack((X_val_processed, v_distances))
-            
-        kmeans_path = output_dir / f"{variant}_kmeans.joblib"
-        joblib.dump(kmeans, kmeans_path)
+    
     optuna.logging.set_verbosity(optuna.logging.INFO)
     db_path = output_dir / f"{variant}_sklearn_optuna.db"
     study_name = f"{variant}_optimization_{output_dir.name}"
@@ -396,26 +409,47 @@ def run_rf_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
     print(f"\nStarting Optuna search ({n_trials} trials | Variant: {variant.upper()} | Strategy: {weight_strategy.upper()} | Base Wt: {upset_weight})...")
     
     study.optimize(
-        lambda trial: objective(trial, X_train, y_train, X_val, y_val, n_est_min, n_est_max, depth_min, depth_max, variant, add_pca, add_kmeans, n_clusters, validation, weight_strategy, upset_weight, n_splits, tscv_test_size),
+        lambda trial: objective(trial, X_train, y_train, X_val, y_val, n_est_min, n_est_max, depth_min, depth_max, variant, add_pca, add_kmeans, n_clusters_min, n_clusters_max, validation, weight_strategy, upset_weight, n_splits, tscv_test_size),
         n_trials=n_trials
     )
     
     best_params = study.best_params
     print(f"\nBest parameters found: {best_params}")
-    
+
+    # Create a copy so we can pop 'n_clusters' without losing it for the JSON config
+    model_params = best_params.copy()
+    best_k = 0
+
+    # ✅ NEW: Apply KMeans for the final model using the BEST k found by Optuna
+    if add_kmeans:
+        best_k = model_params.pop("n_clusters")  # Remove it so it doesn't break the RF model
+        print(f"Applying KMeans clustering (k={best_k}) for {variant.upper()} final model...")
+        
+        kmeans = KMeans(n_clusters=best_k, random_state=42, n_init='auto')
+        t_distances = kmeans.fit_transform(X_train_processed)
+        X_train_processed = np.hstack((X_train_processed, t_distances))
+        
+        if X_val_scaled is not None:
+            v_distances = kmeans.transform(X_val_processed)
+            X_val_processed = np.hstack((X_val_processed, v_distances))
+            
+        kmeans_path = output_dir / f"{variant}_kmeans.joblib"
+        joblib.dump(kmeans, kmeans_path)
+
+    # Initialize your Final Classifier using model_params (which no longer contains n_clusters)
     if variant == "extra_trees":
-        final_clf = ExtraTreesClassifier(**best_params, random_state=42, n_jobs=-1)
+        final_clf = ExtraTreesClassifier(**model_params, random_state=42, n_jobs=-1)
     elif variant == "rrf":
-        final_clf = RandomForestClassifier(**best_params, random_state=42, n_jobs=-1)
+        final_clf = RandomForestClassifier(**model_params, random_state=42, n_jobs=-1)
     elif variant == "rotation_forest":
-        final_clf = RotationForestClassifier(**best_params, random_state=42)
+        final_clf = RotationForestClassifier(**model_params, random_state=42)
     elif variant == "oblique":
-        final_clf = ObliqueRandomForestClassifier(**best_params, random_state=42, n_jobs=-1)
+        final_clf = ObliqueRandomForestClassifier(**model_params, random_state=42, n_jobs=-1)
     elif variant == "weighted":
         # It takes standard RF parameters, so Optuna tunes it exactly like a normal RF
-        final_clf = WeightedRandomForestClassifier(**best_params, random_state=42, n_jobs=-1)
+        final_clf = WeightedRandomForestClassifier(**model_params, random_state=42, n_jobs=-1)
     else:
-        final_clf = RandomForestClassifier(**best_params, random_state=42, n_jobs=-1)
+        final_clf = RandomForestClassifier(**model_params, random_state=42, n_jobs=-1)
         
     final_weights = generate_sample_weights(X_train, y_train, weight_strategy, upset_weight)
     
@@ -443,29 +477,29 @@ def run_rf_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
     print("-" * 30 + "\n")  
     joblib.dump(final_clf, model_path)
     joblib.dump(scaler, scaler_path)
-    
     # ---> DYNAMIC FEATURE NAMES IF PCA IS ENABLED
     if add_pca:
         # Subtract the KMeans columns to get the true number of Principal Components
-        n_pcs = X_train_processed.shape[1] - (n_clusters if add_kmeans else 0)
+        n_pcs = X_train_processed.shape[1] - (best_k if add_kmeans else 0)
         final_feature_names = [f"PC{i+1}" for i in range(n_pcs)]
     else:
-        final_feature_names = list(X_train.columns)
+        # ---> FIX: Use X_train_features, NOT X_train, so 'is_augmented' isn't included
+        final_feature_names = list(X_train_features.columns)
         
     # Append the new K-Means features to the name list so they match the coefficients
     if add_kmeans:
-        kmeans_names = [f"KMeans_Dist_C{i+1}" for i in range(n_clusters)]
+        kmeans_names = [f"KMeans_Dist_C{i+1}" for i in range(best_k)]
         final_feature_names.extend(kmeans_names)
 
     config = {
         "model_type": variant.upper(),
         "optimizer": "Optuna",
-        "best_params": best_params,
+        "best_params": best_params,  # Keeps 'n_clusters' logged in the file for reference
         "train_accuracy": train_acc,
         "val_accuracy": study.best_value,
         "pca_applied": add_pca,
-        "kmeans_applied": add_kmeans,  # <--- NEW
-        "n_clusters": n_clusters if add_kmeans else 0, # <--- NEW
+        "kmeans_applied": add_kmeans,  
+        "n_clusters": best_k, 
         "weight_strategy": weight_strategy,
         "upset_weight": upset_weight,
         "features_used": final_feature_names
