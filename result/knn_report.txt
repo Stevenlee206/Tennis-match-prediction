@@ -1,0 +1,59 @@
+
+=======================================================
+BÁO CÁO SO SÁNH HIỆU SUẤT KNN (K tối ưu)
+=======================================================
+Mô hình                        | Tập dữ liệu     | Accuracy  
+--------------------------------------------------------------
+Sklearn KNN (Đầy đủ)           | Full Test       | 0.6372
+Sklearn KNN (Tập con)          | Subset 100      | 0.6800
+KNN From Scratch (Tập con)     | Subset 100      | 0.6800
+=======================================================
+
+[Kiểm thử đối chiếu] Mức độ trùng khớp dự đoán giữa Scratch và Sklearn trên tập con: 100.0% (100/100 mẫu)
+
+[Chi tiết] Báo cáo chi tiết Sklearn KNN trên Full Test:
+              precision    recall  f1-score   support
+
+           0       0.64      0.64      0.64      2916
+           1       0.64      0.64      0.64      2916
+
+    accuracy                           0.64      5832
+   macro avg       0.64      0.64      0.64      5832
+weighted avg       0.64      0.64      0.64      5832
+
+
+========================================
+BÁO CÁO THỜI GIAN CHẠY (RUNTIME REPORT)
+========================================
+- Tổng thời gian Cross-Validation (11 giá trị K, 5 Folds): 16.62s
+- Thời gian dự đoán của Sklearn trên toàn bộ tập Test (5832 mẫu): 0.4529s
+- Thời gian dự đoán của Sklearn trên tập con (100 mẫu): 0.0109s
+- Thời gian dự đoán của Scratch trên tập con (100 mẫu): 0.6317s
+- Tốc độ vượt trội của Sklearn trên tập con: gấp 58.1 lần so với Scratch
+- Ước lượng thời gian nếu chạy Scratch trên toàn bộ tập Test: 36.84s
+
+
+========================================
+GỢI Ý TỐI ƯU HÓA SIÊU THAM SỐ (HYPERPARAMETER TUNING)
+========================================
+1. Số láng giềng (K):
+   - Đã được tìm kiếm tự động bằng phương pháp Cross-Validation (K tối ưu hiện tại = 75).
+   - Có thể mở rộng khoảng tìm kiếm hoặc thử nghiệm các bước nhảy nhỏ hơn nếu cần (ví dụ: các số lẻ từ 1 đến 100).
+
+2. Khoảng cách (Distance Metrics):
+   - Thử nghiệm các hàm tính khoảng cách khác trong Sklearn KNN như:
+     * 'manhattan' (L1 distance): Phù hợp khi các đặc trưng có phân phối thưa hoặc nhiều nhiễu.
+     * 'chebyshev' (L_infinity distance): Chỉ xét chênh lệch lớn nhất giữa các chiều đặc trưng.
+     * 'minkowski' với tham số p khác nhau (p=3, p=4...).
+
+3. Trọng số đóng góp (Weights):
+   - 'uniform': Tất cả các điểm láng giềng có trọng số bỏ phiếu ngang nhau (hiện tại đang dùng).
+   - 'distance': Các láng giềng gần hơn sẽ có tiếng nói/trọng số lớn hơn khi dự đoán.
+
+4. Chuẩn hóa đặc trưng (Feature Scaling):
+   - Hiện tại đang sử dụng StandardScaler. Đối với KNN, phân bố đặc trưng ảnh hưởng cực kỳ lớn. 
+   - Có thể thử nghiệm MinMaxScaler hoặc RobustScaler (nếu dữ liệu chứa nhiều Outliers).
+
+5. Giảm chiều dữ liệu (Dimensionality Reduction):
+   - Sử dụng PCA (Principal Component Analysis) để giữ lại 95% phương sai (giống như trong file `mlp_pytorch_optuna.py`).
+   - Việc giảm chiều giúp giảm hiện tượng "curse of dimensionality" của KNN và tăng tốc độ dự đoán của KNN Scratch đáng kể.

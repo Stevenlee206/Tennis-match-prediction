@@ -44,7 +44,7 @@ def prepare_loaders(df, target_col='target', batch_size=64, n_splits=5, val_rati
     X_test = scaler_full.transform(X_test_raw)
 
     test_loader = DataLoader(TennisDataset(X_test, y_test), batch_size=batch_size, shuffle=False)
-    train_val_loader = DataLoader(TennisDataset(X_train_val_scaled, y_train_val), batch_size=batch_size, shuffle=True)
+    train_val_loader = DataLoader(TennisDataset(X_train_val_scaled, y_train_val), batch_size=batch_size, shuffle=False)
 
     folds = []
     for k in range(n_splits):
@@ -63,7 +63,7 @@ def prepare_loaders(df, target_col='target', batch_size=64, n_splits=5, val_rati
         X_train = scaler_fold.fit_transform(X_train_raw)
         X_val = scaler_fold.transform(X_val_raw)
 
-        train_loader = DataLoader(TennisDataset(X_train, y_train), batch_size=batch_size, shuffle=True)
+        train_loader = DataLoader(TennisDataset(X_train, y_train), batch_size=batch_size, shuffle=False)
         val_loader = DataLoader(TennisDataset(X_val, y_val), batch_size=batch_size, shuffle=False)
 
         folds.append((train_loader, val_loader))
