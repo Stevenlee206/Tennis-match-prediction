@@ -219,6 +219,9 @@ class PredictiveCodingNetworkTorch:
             y = torch.tensor(y, device=self.device, dtype=torch.float32)
         else:
             y = y.to(self.device, dtype=torch.float32)
+            
+        if y.ndim == 1:
+            y = y.view(-1, 1)
 
         states, _ = self.forward(x0)
         self.infer_hidden_states(states, targets=y, clamp_output=True)

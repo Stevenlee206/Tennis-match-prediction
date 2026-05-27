@@ -53,7 +53,6 @@ def fill_missing_values(df: pd.DataFrame, train_idx: int) -> pd.DataFrame:
 def remove_leaky_columns(df: pd.DataFrame) -> pd.DataFrame:
     direct_leak = [
         'winner_id', 'loser_id',
-        'winner_name', 'loser_name',
         'winner_ioc', 'loser_ioc',      
         'score',
         'minutes',                        

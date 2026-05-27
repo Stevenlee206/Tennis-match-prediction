@@ -69,7 +69,10 @@ class Preprocessing:
         current_train_idx = int(len(data) * train_ratio)
         
         # Pass the NEW index to correlation selector
+        names = data[['winner_name', 'loser_name']].copy() if 'winner_name' in data.columns else None
         data = feature_selection(data, current_train_idx, k=40) 
+        if names is not None:
+            data[['winner_name', 'loser_name']] = names
         
         nan_cols = data.columns[data.isna().any()].tolist()
         if nan_cols:
