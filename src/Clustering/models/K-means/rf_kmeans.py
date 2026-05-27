@@ -36,12 +36,12 @@ def run_kmeans_cluster_search(min_clusters=3, max_clusters=25):
         X_test = X_test[X_test['is_augmented'] == 0].drop(columns=['is_augmented'])
         X_train = X_train.drop(columns=['is_augmented'], errors='ignore')
 
-    # Scaling is absolutely mandatory for K-Means Euclidean distance calculation
+    # Scaling is absolutely mandatory for Clustering Euclidean distance calculation
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
 
-    # --- Step 2: Calculate Baseline (No K-Means) ---
+    # --- Step 2: Calculate Baseline (No Clustering) ---
     print("\n-> Calculating Baseline Random Forest Accuracy...")
     base_clf = RandomForestClassifier(
         n_estimators=300, max_depth=15, min_samples_split=25, 
@@ -55,13 +55,13 @@ def run_kmeans_cluster_search(min_clusters=3, max_clusters=25):
     results = []
     
     for k in range(min_clusters, max_clusters + 1):
-        print(f"Evaluating K-Means with k={k} clusters...", end=" ")
+        print(f"Evaluating Clustering with k={k} clusters...", end=" ")
         
         # Reset the feature sets to clean copies for each iteration
         X_train_aug = X_train.copy()
         X_test_aug = X_test.copy()
 
-        # Train K-Means
+        # Train Clustering
         kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
         kmeans.fit(X_train_scaled)
         
@@ -102,14 +102,14 @@ def run_kmeans_cluster_search(min_clusters=3, max_clusters=25):
     sns.set_style("whitegrid")
     
     # Plot the augmented accuracies
-    plt.plot(k_values, accuracies, marker='s', linewidth=2, markersize=8, color='#2980b9', label='RF + K-Means Centroid Distances')
+    plt.plot(k_values, accuracies, marker='s', linewidth=2, markersize=8, color='#2980b9', label='RF + Clustering Centroid Distances')
     
     # Plot the baseline
     plt.axhline(y=baseline_acc, color='#e74c3c', linestyle='--', linewidth=2, label=f'Baseline RF ({baseline_acc:.2f}%)')
     
     # Aesthetics
-    plt.title('Random Forest Accuracy vs. K-Means Geometric Sub-Archetypes', fontsize=16, pad=15)
-    plt.xlabel('Number of K-Means Clusters (k)', fontsize=12)
+    plt.title('Random Forest Accuracy vs. Clustering Geometric Sub-Archetypes', fontsize=16, pad=15)
+    plt.xlabel('Number of Clustering Clusters (k)', fontsize=12)
     plt.ylabel('Test Set Accuracy (%)', fontsize=12)
     plt.xticks(range(min_clusters, max_clusters + 1))
     plt.legend(fontsize=12)

@@ -5,15 +5,16 @@ import seaborn as sns
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
-from sklearn.linear_model import LogisticRegression
+from sklearn.mixture import GaussianMixture
+from sklearn.naive_bayes import GaussianNB
 from sklearn.metrics import accuracy_score
 
 # Import your existing preprocessing pipeline
 from src.preprocessing.preprocessing import Preprocessing
 
-def run_logreg_kmeans_search(min_clusters=3, max_clusters=25):
+def run_gnb_kmeans_search(min_clusters=3, max_clusters=25):
     print(f"\n{'='*70}")
-    print(f" AUTOMATED K-MEANS + LOGISTIC REGRESSION SEARCH ({min_clusters} to {max_clusters})")
+    print(f" AUTOMATED K-MEANS + GAUSSIAN NAIVE BAYES SEARCH ({min_clusters} to {max_clusters})")
     print(f"{'='*70}")
 
     # --- Step 1: Data Preparation ---
@@ -36,15 +37,14 @@ def run_logreg_kmeans_search(min_clusters=3, max_clusters=25):
         X_test = X_test[X_test['is_augmented'] == 0].drop(columns=['is_augmented'])
         X_train = X_train.drop(columns=['is_augmented'], errors='ignore')
 
-    # Scale the base features (Mandatory for K-Means and Logistic Regression)
+    # Scale the base features (Mandatory for Clustering and ideal for numerical stability in GNB)
     base_scaler = StandardScaler()
     X_train_scaled = base_scaler.fit_transform(X_train)
     X_test_scaled = base_scaler.transform(X_test)
 
-    # --- Step 2: Calculate Baseline (Pure Logistic Regression) ---
-    print("\n-> Calculating Baseline Logistic Regression Accuracy...")
-    # max_iter=10000 ensures the gradient descent solver fully converges
-    base_clf = LogisticRegression(max_iter=10000, random_state=42)
+    # --- Step 2: Calculate Baseline (Pure Gaussian Naive Bayes) ---
+    print("\n-> Calculating Baseline GaussianNB Accuracy...")
+    base_clf = GaussianNB()
     base_clf.fit(X_train_scaled, y_train)
     baseline_acc = accuracy_score(y_test, base_clf.predict(X_test_scaled)) * 100
     print(f"   Baseline Accuracy: {baseline_acc:.2f}%\n")
@@ -53,27 +53,27 @@ def run_logreg_kmeans_search(min_clusters=3, max_clusters=25):
     results = []
     
     for k in range(min_clusters, max_clusters + 1):
-        print(f"Evaluating K-Means with k={k} clusters...", end=" ")
+        print(f"Evaluating GMM with k={k} components...", end=" ")
         
-        # Train K-Means on the scaled training features
-        kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
-        kmeans.fit(X_train_scaled)
+        # Train GMM
+        gmm = GaussianMixture(n_components=k, covariance_type='full', random_state=42, n_init=5)
+        gmm.fit(X_train_scaled)
         
-        # Extract continuous distances to all K centroids
-        train_distances = kmeans.transform(X_train_scaled)
-        test_distances = kmeans.transform(X_test_scaled)
+        # Extract raw log-likelihoods (Mahalanobis variance proxy)
+        train_log_probs = gmm._estimate_log_prob(X_train_scaled)
+        test_log_probs = gmm._estimate_log_prob(X_test_scaled)
 
-        # SCALING IS CRITICAL: Logistic Regression penalizes large values.
-        dist_scaler = StandardScaler()
-        train_dists_scaled = dist_scaler.fit_transform(train_distances)
-        test_dists_scaled = dist_scaler.transform(test_distances)
+        # SCALING IS CRITICAL: Prevent log-likelihoods from dominating the L2 penalty
+        ll_scaler = StandardScaler()
+        train_ll_scaled = ll_scaler.fit_transform(train_log_probs)
+        test_ll_scaled = ll_scaler.transform(test_log_probs)
 
-        # Horizontally stack the base scaled features with the new scaled distance features
-        X_train_aug = np.hstack((X_train_scaled, train_dists_scaled))
-        X_test_aug = np.hstack((X_test_scaled, test_dists_scaled))
+        # Horizontally stack features
+        X_train_aug = np.hstack((X_train_scaled, train_ll_scaled))
+        X_test_aug = np.hstack((X_test_scaled, test_ll_scaled))
 
-        # Train Augmented Logistic Regression
-        clf = LogisticRegression(max_iter=10000, random_state=42)
+        # Train Augmented Gaussian Naive Bayes
+        clf = GaussianNB()
         clf.fit(X_train_aug, y_train)
         
         # Evaluate
@@ -94,15 +94,15 @@ def run_logreg_kmeans_search(min_clusters=3, max_clusters=25):
     plt.figure(figsize=(12, 7))
     sns.set_style("whitegrid")
     
-    # Plot the augmented accuracies
-    plt.plot(k_values, accuracies, marker='o', linewidth=2, markersize=8, color='#d35400', label='LogReg + K-Means Centroid Distances')
+    # Plot the augmented accuracies (Using a deep teal color)
+    plt.plot(k_values, accuracies, marker='X', linewidth=2, markersize=8, color='#16a085', label='GaussianNB + Clustering Centroid Distances')
     
     # Plot the baseline
-    plt.axhline(y=baseline_acc, color='#2c3e50', linestyle='--', linewidth=2, label=f'Baseline LogReg ({baseline_acc:.2f}%)')
+    plt.axhline(y=baseline_acc, color='#e74c3c', linestyle='--', linewidth=2, label=f'Baseline GaussianNB ({baseline_acc:.2f}%)')
     
     # Aesthetics
-    plt.title('Logistic Regression Accuracy vs. K-Means Geometric Augmentation', fontsize=16, pad=15)
-    plt.xlabel('Number of K-Means Clusters (k)', fontsize=12)
+    plt.title('Gaussian Naive Bayes Accuracy vs. Clustering Geometric Augmentation', fontsize=16, pad=15)
+    plt.xlabel('Number of Clustering Clusters (k)', fontsize=12)
     plt.ylabel('Test Set Accuracy (%)', fontsize=12)
     plt.xticks(range(min_clusters, max_clusters + 1))
     plt.legend(fontsize=12)
@@ -116,10 +116,10 @@ def run_logreg_kmeans_search(min_clusters=3, max_clusters=25):
                  fontsize=10, ha='center')
 
     plt.tight_layout()
-    plt.savefig('logreg_kmeans_search.png', dpi=300)
-    print("-> Graph saved successfully as 'logreg_kmeans_search.png'!")
+    plt.savefig('gaussian_nb_gmm_search.png', dpi=300)
+    print("-> Graph saved successfully as 'gaussian_nb_kmeans_search.png'!")
     
     plt.show()
 
 if __name__ == "__main__":
-    run_logreg_kmeans_search(min_clusters=3, max_clusters=25)
+    run_gnb_kmeans_search(min_clusters=3, max_clusters=25)
