@@ -281,7 +281,7 @@ def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_
     else:
         final_feature_names = list(X_train.columns)
         
-    # Append the new K-Means features to the name list so they match the coefficients
+    # Append the new Clustering features to the name list so they match the coefficients
     if add_kmeans:
         kmeans_names = [f"KMeans_Dist_C{i+1}" for i in range(n_clusters)]
         final_feature_names.extend(kmeans_names)

@@ -6,7 +6,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from src.preprocessing.load_data import load_data
+from src.preprocessing.load_data_func.load_data import load_data
 from src.preprocessing.target_encoding import create_target
 from src.preprocessing.feature_engineering import build_elo_feature, build_glicko2_feature, build_recent_form, build_basic_features
 from src.preprocessing.clean_data import drop_high_missing_columns, fill_missing_values, remove_leaky_columns, remove_unused_data
@@ -31,10 +31,10 @@ class Preprocessing:
         self.data = pd.concat(dfs, axis=0, ignore_index=True)
         return self.data
     
-    # --- UPDATED: Accept train_ratio dynamically ---
+    # Update: Accept train_ratio dynamically
     def run(self, train_ratio=0.64):
         data = self._load()
-
+        # Delete error records
         stat_cols = [c for c in data.columns if c.startswith(('w_', 'l_'))]
         data = data.dropna(subset=stat_cols)
 

@@ -5,13 +5,11 @@ import seaborn as sns
 from pathlib import Path
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
-# ==========================================
+
 # Directory Setup
-# ==========================================
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_PATH = PROJECT_ROOT / "data" / "processed" / "train.csv"
 REPORTS_DIR = PROJECT_ROOT / "reports" / "figures" / "eda"
-
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 def load_data():
@@ -21,9 +19,7 @@ def load_data():
     data = pd.read_csv(DATA_PATH)
     return data
 
-# ==========================================
 # 1. Correlation Matrix
-# ==========================================
 def plot_correlation_matrix(df, target_col='target'):
     print("Generating Correlation Matrix...")
     
@@ -114,29 +110,22 @@ def plot_pca_analysis(X_scaled, y):
     plt.close()
     print(f"PCA Plots saved to {REPORTS_DIR}")
 
-# ==========================================
-# Main Execution
-# ==========================================
+
 if __name__ == "__main__":
-    print("==============================================")
     print(" Exploratory Data Analysis (EDA)")
-    print("==============================================\n")
-    
+    # load_data_func
     df = load_data()
-    
     # Separate features and target
     if 'target' not in df.columns:
         raise ValueError("Target column not found in dataset.")
-        
     X = df.drop(columns=['target'])
     y = df['target']
     
-    # 1. Correlation Analysis
+    # Plot Correlation Matrix
     plot_correlation_matrix(df)
     
-    # 2. PCA Analysis requires strictly scaled data
+    # PCA Analysis requires strictly scaled data
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
-    
     plot_pca_analysis(X_scaled, y)
     print("\nEDA Pipeline Complete.")
