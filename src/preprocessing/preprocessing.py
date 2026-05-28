@@ -2,20 +2,19 @@ import pandas as pd
 import os
 import sys
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from src.preprocessing.load_data_func.load_data import load_data
-from src.preprocessing.target_encoding import create_target
-from src.preprocessing.feature_engineering import build_elo_feature, build_glicko2_feature, build_recent_form, build_basic_features
-from src.preprocessing.clean_data import drop_high_missing_columns, fill_missing_values, remove_leaky_columns, remove_unused_data
+from src.preprocessing.encoding.target_encoding import create_target
+from src.preprocessing.data_cleaning.clean_data import drop_high_missing_columns, fill_missing_values, remove_leaky_columns, remove_unused_data
+from src.preprocessing.feature_engineering_func.feature_engineering import build_elo_feature, build_glicko2_feature, build_recent_form, build_basic_features
 from src.config.data_config import YEARS, CLEAN_THRESHOLD
-from src.preprocessing.encoder import encode_categorical_features
-from src.preprocessing.feature_selection import feature_selection
-from src.preprocessing.context_features import apply_fatigue_and_clutch_metrics
-from src.preprocessing.gao_features import apply_historical_serve_metrics
-from src.preprocessing.matchup_features import apply_matchup_topography
+from src.preprocessing.encoding.encoder import encode_categorical_features
+from src.preprocessing.feature_select.feature_selection import feature_selection
+from src.preprocessing.feature_engineering_func.context_features import apply_fatigue_and_clutch_metrics
+from src.preprocessing.feature_engineering_func.gao_features import apply_historical_serve_metrics
+from src.preprocessing.feature_engineering_func.matchup_features import apply_matchup_topography
 
 class Preprocessing:
     def __init__(self):
@@ -42,7 +41,7 @@ class Preprocessing:
             data['tourney_date'] = pd.to_datetime(data['tourney_date'], format='%Y%m%d', errors='coerce')
         data = data.sort_values('tourney_date').reset_index(drop=True)
 
-        # --- UPDATED: Calculate Train Split Threshold based on dynamic ratio ---
+        # Calculate Train Split Threshold based on dynamic ratio
         train_split_idx = int(len(data) * train_ratio)
 
         data = drop_high_missing_columns(data, train_split_idx, threshold=CLEAN_THRESHOLD)
@@ -71,7 +70,7 @@ class Preprocessing:
 
         nan_cols = data.columns[data.isna().any()].tolist()
         if nan_cols:
-            print(f"\n⚠️ WARNING: Sneaky NaNs detected in columns: {nan_cols}")
+            print(f" WARNING: Sneaky NaNs detected in columns: {nan_cols}")
             print("Applying safety net imputation (filling with 0)...")
             data[nan_cols] = data[nan_cols].fillna(0)
 

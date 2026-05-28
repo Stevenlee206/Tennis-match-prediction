@@ -5,16 +5,14 @@ def apply_fatigue_and_clutch_metrics(df, train_idx: int):
     """
     Calculates in-tournament cumulative fatigue and 365-day rolling clutch defense.
     """
-    # 1. Fill missing minutes with the median to avoid NaN math errors
+    # Fill missing minutes with the median to avoid NaN math errors
     median_mins = df['minutes'].iloc[:train_idx].median()
     df['minutes'] = df['minutes'].fillna(median_mins)
     
     # Store original index for safe mapping
     df['match_idx'] = df.index
     
-    # ==========================================
     # EXTRACT TIMELINE DATA
-    # ==========================================
     # Grab minutes AND break point stats all at once!
     winners = df[['match_idx', 'tourney_id', 'match_num', 'winner_id', 'minutes', 'w_bpSaved', 'w_bpFaced']].copy()
     winners.columns = ['match_idx', 'tourney_id', 'match_num', 'player_id', 'minutes', 'bpSaved', 'bpFaced']
@@ -36,17 +34,14 @@ def apply_fatigue_and_clutch_metrics(df, train_idx: int):
     
     # Sort chronologically by player, date, and match number
     timeline = timeline.sort_values(['player_id', 'tourney_date', 'match_num'])
-    
-    # ==========================================
-    # FEATURE 1: IN-TOURNAMENT FATIGUE (MINUTES)
-    # ==========================================
-    # Calculate cumulative minutes played IN THIS TOURNAMENT.
-    # Subtract current match's minutes so we only count PREVIOUS matches (No leakage)
+    """    
+    FEATURE 1: IN-TOURNAMENT FATIGUE (MINUTES)
+    Calculate cumulative minutes played IN THIS TOURNAMENT.
+    Subtract current match's minutes so we only count PREVIOUS matches (No leakage)
+    """
     timeline['cum_minutes'] = timeline.groupby(['tourney_id', 'player_id'])['minutes'].cumsum() - timeline['minutes']
-    
-    # ==========================================
+
     # FEATURE 2: 365-DAY CLUTCH FACTOR (BP SAVED)
-    # ==========================================
     timeline.index = timeline['tourney_date']
     roll_cols = ['bpSaved', 'bpFaced']
     
@@ -60,10 +55,8 @@ def apply_fatigue_and_clutch_metrics(df, train_idx: int):
     # Calculate Ratio safely
     with np.errstate(divide='ignore', invalid='ignore'):
         timeline['ClutchFactor'] = rolling_sums['bpSaved'].values / rolling_sums['bpFaced'].values
-    
-    # ==========================================
+
     # MAP BACK TO MAIN DATAFRAME
-    # ==========================================
     win_stats = timeline[timeline['is_winner']].set_index('match_idx')
     lose_stats = timeline[~timeline['is_winner']].set_index('match_idx')
     

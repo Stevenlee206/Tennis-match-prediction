@@ -12,7 +12,7 @@ def apply_historical_serve_metrics(df, train_idx: int):
 
     df['match_idx'] = df.index
     
-    # 1. Melt winner and loser data
+    # Melt winner and loser data
     winners = df[['match_idx', 'tourney_date', 'winner_id', 'w_ace', 'w_df', 'w_1stIn', 'w_svpt', 'w_1stWon', 'w_2ndIn', 'w_2ndWon']].copy()
     winners.columns = ['match_idx', 'tourney_date', 'player_id', 'ace', 'df', '1stIn', 'svpt', '1stWon', '2ndIn', '2ndWon']
     winners['is_winner'] = True
@@ -25,22 +25,22 @@ def apply_historical_serve_metrics(df, train_idx: int):
     timeline = pd.concat([winners, losers]).sort_values(['player_id', 'tourney_date'])
     timeline.index = timeline['tourney_date']
     
-    # 2. Calculate 365-day rolling sums
+    # Calculate 365-day rolling sums
     roll_cols = ['ace', 'df', '1stIn', 'svpt', '1stWon', '2ndIn', '2ndWon']
     rolling_sums = timeline.groupby('player_id')[roll_cols].rolling('365D', min_periods=1).sum()
     
-    # 3. SUBTRACT CURRENT MATCH TO PREVENT TARGET LEAKAGE
+    # SUBTRACT CURRENT MATCH TO PREVENT TARGET LEAKAGE
     for col in roll_cols:
         rolling_sums[col] = rolling_sums[col].values - timeline[col].values
         
-    # 4. Calculate Historical Ratios safely (suppress numpy zero-division warnings)
+    # Calculate Historical Ratios safely (suppress numpy zero-division warnings)
     with np.errstate(divide='ignore', invalid='ignore'):
         timeline['AceVsDf'] = rolling_sums['ace'].values / rolling_sums['df'].values
         timeline['FirstIn1stServe'] = rolling_sums['1stIn'].values / rolling_sums['svpt'].values
         timeline['FirstWonFirstIn'] = rolling_sums['1stWon'].values / rolling_sums['1stIn'].values
         timeline['SecondWonSecondIn'] = rolling_sums['2ndWon'].values / rolling_sums['2ndIn'].values
     
-    # 5. Map back to main dataframe
+    # Map back to main dataframe
     win_stats = timeline[timeline['is_winner']].set_index('match_idx')
     lose_stats = timeline[~timeline['is_winner']].set_index('match_idx')
     

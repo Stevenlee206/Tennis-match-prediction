@@ -1,6 +1,13 @@
+
 import pandas as pd
 
 def apply_matchup_topography(df):
+    """
+    Computes historical Head-to-Head (H2H) advantage and
+    handedness-specific win percentage differences between opponents.
+    It utilizes chronological running trackers that update strictly
+    after each match's features are calculated to prevent data leakage.
+    """
     df = df.sort_values(['tourney_date']).copy()
     
     h2h_tracker = {} 

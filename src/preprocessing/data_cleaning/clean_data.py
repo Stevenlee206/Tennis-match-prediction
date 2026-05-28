@@ -1,6 +1,11 @@
 import pandas as pd
 
 def drop_high_missing_columns(df: pd.DataFrame, train_idx: int, threshold: float = 0.1) -> pd.DataFrame:
+    """
+    Removes features with high missing value ratios,
+    calculating the threshold strictly on the training subset to prevent data
+    leakage before applying the drop to the entire dataset.
+    """
     data = df.copy()
     # FIT: calculate missing ratio strictly on the train pool
     missing_ratio = data.iloc[:train_idx].isnull().mean()
@@ -34,11 +39,12 @@ def fill_missing_values(df: pd.DataFrame, train_idx: int) -> pd.DataFrame:
         data[col] = data.apply(
             lambda row: ioc_meds.get(row.get(ioc_col, 'Unknown'), glob_med) if pd.isna(row[col]) else row[col], axis=1
         )  
-        
+    # Age is median by default
     for col in ['winner_age', 'loser_age']:
         data[col] = data[col].fillna(train_slice[col].median())
         
     data['surface'] = data['surface'].fillna('Unknown')
+    # Hand is Right by default
     data['winner_hand'] = data['winner_hand'].fillna('R')
     data['loser_hand']  = data['loser_hand'].fillna('R')
 
@@ -74,7 +80,7 @@ def remove_leaky_columns(df: pd.DataFrame) -> pd.DataFrame:
     existing_drops = [c for c in cols_to_drop if c in df.columns]
     data = df.drop(columns=existing_drops)
     return data
-
+# unused meta data removing
 def remove_unused_data(data: pd.DataFrame) -> pd.DataFrame:
     COLS_TO_DROP = ['tourney_id', 'draw_size', 'tourney_date', 'match_num', 'rank_age_interaction',
         'winner_elo', 'loser_elo', 'winner_rank_missing', 'loser_rank_missing']

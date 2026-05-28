@@ -1,14 +1,18 @@
 import pandas as pd
-import numpy as np
 
 def feature_selection(df: pd.DataFrame, train_idx: int, k: int = 10) -> pd.DataFrame:
+    """
+    Selects the top 'k' numeric features with the highest absolute Pearson correlation to the target variable.
+    To prevent data leakage, zero-variance checks and correlation calculations are fitted strictly on the training subset
+    before filtering the entire dataset, while preserving essential metadata columns (target, year, is_augmented).
+    """
     data = df.copy()
     data = data.select_dtypes(exclude=['object', 'category'])
     
-    # 1. Isolate Training Pool
+    # Isolate Training Pool
     train_slice = data.iloc[:train_idx]
     
-    # 2. Fit zero-variance check on TRAIN
+    # Fit zero-variance check on TRAIN
     cols_to_check = [c for c in train_slice.columns if c != 'target']
     variances = train_slice[cols_to_check].var()
     

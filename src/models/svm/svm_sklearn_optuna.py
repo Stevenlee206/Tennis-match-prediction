@@ -156,7 +156,10 @@ def plot_feature_importance(clf, feature_names, save_path):
     plt.close()
 
 # ---> ADDED c_min and c_max arguments
-def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_trials=30, kernel="linear", c_min=1e-3, c_max=1e2, add_pca=False, add_kmeans=False, n_clusters=5, validation="holdout", weight_strategy="none", upset_weight=1.0, n_splits=5, tscv_test_size=None):
+def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
+                     n_trials=30, kernel="linear", c_min=1e-3, c_max=1e2, add_pca=False,
+                     add_kmeans=False, n_clusters=5, validation="holdout",
+                     weight_strategy="none", upset_weight=1.0, n_splits=5, tscv_test_size=None):
     output_dir = Path(output_dir)
     reports_dir = Path(reports_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
