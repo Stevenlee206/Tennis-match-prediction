@@ -6,52 +6,103 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import optuna
 from pathlib import Path
-from sklearn.svm import SVC
+import warnings
+
+from hmmlearn.hmm import GaussianHMM
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import accuracy_score
+from sklearn.exceptions import ConvergenceWarning
 
-def generate_sample_weights(X_raw, y_raw, strategy="none", base_weight=1.0):
+# ==========================================
+# STREAMLINED HMM CLASSIFIER
+# ==========================================
+class FastHMMClassifier:
     """
-    Dynamically calculates sample weights based on upset severity.
+    A simplified, fast wrapper to use hmmlearn for classification.
+    Removes the custom early-stopping loop to leverage C-level optimizations.
     """
-    n_samples = len(y_raw)
-    weights = np.ones(n_samples)
+    def __init__(self, n_components=3, covariance_type='diag', n_iter=100, min_covar=1e-3, random_state=42):
+        self.n_components = n_components
+        self.covariance_type = covariance_type
+        self.n_iter = n_iter
+        self.min_covar = min_covar
+        self.random_state = random_state
+        self.models = {}
+        self.classes_ = []
+
+    def fit(self, X, y, sample_weight=None):
+        self.classes_ = np.unique(y)
+        for c in self.classes_:
+            X_c = X[y == c]
+            
+            model = GaussianHMM(
+                n_components=min(self.n_components, max(1, len(X_c))), 
+                covariance_type=self.covariance_type, 
+                n_iter=self.n_iter, 
+                min_covar=self.min_covar,
+                random_state=self.random_state
+            )
+            
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", ConvergenceWarning)
+                if len(X_c) > 0:
+                    model.fit(X_c)
+                    
+            self.models[c] = model
+        return self
+
+    def predict_proba(self, X):
+        """
+        Calculates raw probabilities by extracting log-likelihoods and 
+        applying a stable softmax transformation.
+        """
+        log_likelihoods = np.full((X.shape[0], len(self.classes_)), -np.inf)
+        
+        # Score the independent observations efficiently
+        for class_idx, class_label in enumerate(self.classes_):
+            model = self.models.get(class_label)
+            if model is not None:
+                for i in range(X.shape[0]):
+                    try:
+                        # model.score returns the log-likelihood
+                        log_likelihoods[i, class_idx] = model.score(X[i:i+1])
+                    except Exception:
+                        pass
+        
+        # Apply LogSumExp / Softmax trick for numerical stability
+        max_logits = np.max(log_likelihoods, axis=1, keepdims=True)
+        # Prevent completely -inf rows from turning into NaNs
+        max_logits[max_logits == -np.inf] = 0.0 
+        
+        stabilized_exp = np.exp(log_likelihoods - max_logits)
+        probabilities = stabilized_exp / np.sum(stabilized_exp, axis=1, keepdims=True)
+        
+        return probabilities
+
+    def predict(self, X):
+        """
+        Returns the class with the highest probability.
+        """
+        proba = self.predict_proba(X)
+        return self.classes_[np.argmax(proba, axis=1)]
+
+
+def objective(trial, X_train, y_train, X_val, y_val, add_pca=False, validation="holdout", n_splits=5, tscv_test_size=None):
+    # HMM Hyperparameters
+    n_components = trial.suggest_int("n_components", 2, 6)
+    covariance_type = trial.suggest_categorical("covariance_type", ["diag", "spherical"])
+    n_iter = trial.suggest_int("n_iter", 50, 200)
+    min_covar = trial.suggest_float("min_covar", 1e-4, 1e-2, log=True)
     
-    if strategy == "none" or base_weight <= 1.0 or 'elo_diff' not in X_raw.columns:
-        return weights
-
-    y_vals = y_raw.values if isinstance(y_raw, pd.Series) else y_raw
-    elo_diffs = X_raw['elo_diff'].values
-    
-    # Base Upset Mask
-    upset_mask = ((elo_diffs > 0) & (y_vals == 0)) | ((elo_diffs < 0) & (y_vals == 1))
-
-    if strategy == "static":
-        weights[upset_mask] = base_weight
-    elif strategy == "magnitude":
-        for i in range(n_samples):
-            if upset_mask[i]:
-                gap_severity = abs(elo_diffs[i]) / 100.0
-                weights[i] = 1.0 + (base_weight * gap_severity)
-    elif strategy == "temporal":
-        decay_curve = np.exp(np.linspace(-3, 0, n_samples))
-        for i in range(n_samples):
-            if upset_mask[i]:
-                weights[i] = 1.0 + ((base_weight - 1.0) * decay_curve[i])
-
-    return weights
-
-def objective(trial, X_train, y_train, X_val, y_val, kernel, c_min=1e-3, c_max=1e2, add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0, n_splits=5, tscv_test_size=None):
-    c_param = trial.suggest_float("C", c_min, c_max, log=True)
-    params = {"C": c_param, "kernel": kernel, "random_state": 42}
-    
-    # Kernel specific params
-    if kernel in ['rbf', 'poly']:
-        params['gamma'] = 'scale'
-    if kernel == 'poly':
-        params['degree'] = trial.suggest_int('degree', 2, 5)
+    params = {
+        "n_components": n_components,
+        "covariance_type": covariance_type,
+        "n_iter": n_iter,
+        "min_covar": min_covar,
+        "random_state": 42
+    }
 
     # ==========================================
     # STRATEGY 1: STANDARD HOLDOUT
@@ -68,11 +119,8 @@ def objective(trial, X_train, y_train, X_val, y_val, kernel, c_min=1e-3, c_max=1
         else:
             X_t_processed, X_v_processed = X_t_scaled, X_v_scaled
             
-        weights = generate_sample_weights(X_train, y_train, weight_strategy, upset_weight)
-        
-        # Enable probability=True for scoring metrics
-        clf = SVC(**params, probability=True)
-        clf.fit(X_t_processed, y_train, sample_weight=weights)
+        clf = FastHMMClassifier(**params)
+        clf.fit(X_t_processed, y_train)
         val_preds = clf.predict(X_v_processed)
         
         return accuracy_score(y_val, val_preds)
@@ -85,18 +133,15 @@ def objective(trial, X_train, y_train, X_val, y_val, kernel, c_min=1e-3, c_max=1
         fold_accuracies = []
         
         for step, (train_index, val_index) in enumerate(tscv.split(X_train)):
-            # Use .copy() to prevent SettingWithCopyWarnings
             X_t_cv = X_train.iloc[train_index].copy()
             X_v_cv = X_train.iloc[val_index].copy()
             y_t_cv = y_train.iloc[train_index].copy()
             y_v_cv = y_train.iloc[val_index].copy()
             
-            # ---> FILTERING LOGIC FOR AUGMENTED DATA <---
             if 'is_augmented' in X_v_cv.columns:
                 val_mask = (X_v_cv['is_augmented'] == 0)
                 X_v_cv = X_v_cv[val_mask]
                 y_v_cv = y_v_cv[val_mask]
-                
                 X_t_cv = X_t_cv.drop(columns=['is_augmented'])
                 X_v_cv = X_v_cv.drop(columns=['is_augmented'])
             
@@ -111,21 +156,14 @@ def objective(trial, X_train, y_train, X_val, y_val, kernel, c_min=1e-3, c_max=1
             else:
                 X_t_processed, X_v_processed = X_t_scaled, X_v_scaled
                 
-            weights_cv = generate_sample_weights(X_t_cv, y_t_cv, weight_strategy, upset_weight)
-            
-            # Enable probability=True for scoring metrics
-            clf_cv = SVC(**params, probability=True) 
-            clf_cv.fit(X_t_processed, y_t_cv, sample_weight=weights_cv)
+            clf_cv = FastHMMClassifier(**params) 
+            clf_cv.fit(X_t_processed, y_t_cv)
             val_preds = clf_cv.predict(X_v_processed)
             
             current_acc = accuracy_score(y_v_cv, val_preds)
             fold_accuracies.append(current_acc)
             
-            # ---> ADD OPTUNA PRUNING HERE <---
-            # Report the average accuracy up to the current fold
             trial.report(np.mean(fold_accuracies), step)
-            
-            # Handle pruning based on the intermediate value
             if trial.should_prune():
                 raise optuna.exceptions.TrialPruned()
             
@@ -146,41 +184,21 @@ def plot_optuna_history(study, save_path):
     plt.close()
 
 
-def plot_feature_importance(clf, feature_names, save_path):
-    importances = clf.coef_[0]
-    importance_df = pd.DataFrame({
-        'Feature': feature_names,
-        'Coefficient': importances,
-        'Absolute_Importance': np.abs(importances)
-    }).sort_values(by='Absolute_Importance', ascending=False)
-
-    plt.figure(figsize=(10, 8))
-    sns.barplot(data=importance_df, x='Coefficient', y='Feature', palette="vlag")
-    plt.title("SVM Feature Importance (Linear Coefficients)")
-    plt.xlabel("Coefficient Value (Directional Impact)")
-    plt.ylabel("Feature")
-    plt.grid(True, axis="x", linestyle="--", alpha=0.7)
-    plt.tight_layout()
-    plt.savefig(save_path / "feature_importance.png", dpi=300)
-    plt.close()
-
-
-def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_trials=30, kernel="linear", c_min=1e-3, c_max=1e2, add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0, n_splits=5, tscv_test_size=None):
+def run_hmm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_trials=30, add_pca=False, validation="holdout", n_splits=5, tscv_test_size=None):
     output_dir = Path(output_dir)
     reports_dir = Path(reports_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     reports_dir.mkdir(parents=True, exist_ok=True)
 
-    model_path = output_dir / f"{kernel}_model.joblib"
-    scaler_path = output_dir / f"{kernel}_scaler.joblib"
+    model_path = output_dir / "hmm_model.joblib"
+    scaler_path = output_dir / "hmm_scaler.joblib"
 
     if model_path.exists() and scaler_path.exists():
         print(f"\n[!] Found existing artifacts in {output_dir.name}. Skipping training and inferring immediately!")
         return joblib.load(model_path), joblib.load(scaler_path)
 
-    print(f"Scaling features for SVM ({kernel.upper()})...")
+    print("Scaling features for HMM...")
     
-    # Protect scaler from the augmented metadata flag
     if 'is_augmented' in X_train.columns:
         X_train_features = X_train.drop(columns=['is_augmented'])
     else:
@@ -195,10 +213,10 @@ def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_
         X_val_scaled = None
     
     if add_pca:
-        print(f"Applying PCA for SVM (Retaining 95% variance)...")
+        print("Applying PCA for HMM (Retaining 95% variance)...")
         pca = PCA(n_components=0.95, random_state=42)
         X_train_processed = pca.fit_transform(X_train_scaled)
-        pca_path = output_dir / f"{kernel}_pca.joblib"
+        pca_path = output_dir / "hmm_pca.joblib"
         joblib.dump(pca, pca_path)
         
         if X_val_scaled is not None:
@@ -209,21 +227,21 @@ def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_
             X_val_processed = X_val_scaled
 
     optuna.logging.set_verbosity(optuna.logging.INFO)
-    db_path = output_dir / f"svm_{kernel}_optuna.db"
+    db_path = output_dir / "hmm_optuna.db"
     storage_url = f"sqlite:///{db_path.absolute()}"
     
-    print(f"\nStarting Optuna search ({n_trials} trials | {kernel.upper()} | C bounds: [{c_min}, {c_max}])...")
+    print(f"\nStarting Optuna search ({n_trials} trials | HMM)...")
     study = optuna.create_study(
-        study_name=f"svm_{kernel}_optimization",
+        study_name="hmm_optimization",
         storage=storage_url,
         load_if_exists=True,
         direction="maximize",
-        pruner=optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=1) # Added pruner
+        pruner=optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=1)
     )
     study.optimize(
-        lambda trial: objective(trial, X_train, y_train, X_val, y_val, kernel, c_min, c_max, add_pca, validation, weight_strategy, upset_weight, n_splits, tscv_test_size),
+        lambda trial: objective(trial, X_train, y_train, X_val, y_val, add_pca, validation, n_splits, tscv_test_size),
         n_trials=n_trials,
-        n_jobs=-1,      # <--- ADD THIS to use all Kaggle CPU cores
+        n_jobs=-1,
         catch=(Exception,)
     )
     
@@ -231,11 +249,8 @@ def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_
     print(f"\nBest parameters found: {best_params}")
     
     print("Training final model with optimal parameters...")
-    # Enable probability=True for scoring metrics
-    final_clf = SVC(**best_params, kernel=kernel, random_state=42, probability=True)
-    
-    final_weights = generate_sample_weights(X_train, y_train, weight_strategy, upset_weight)
-    final_clf.fit(X_train_processed, y_train, sample_weight=final_weights)
+    final_clf = FastHMMClassifier(**best_params, random_state=42)
+    final_clf.fit(X_train_processed, y_train)
     
     train_preds = final_clf.predict(X_train_processed)
     train_acc = accuracy_score(y_train, train_preds)
@@ -257,29 +272,20 @@ def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_
         n_pcs = X_train_processed.shape[1]
         final_feature_names = [f"PC{i+1}" for i in range(n_pcs)]
     else:
-        # Pull strictly from the filtered features dataframe
         final_feature_names = list(X_train_features.columns)
 
     config = {
-        "model_type": "C-SVM",
-        "kernel": kernel,
+        "model_type": "HMM",
         "best_params": best_params,
         "train_accuracy": train_acc,
         "val_accuracy": study.best_value,
         "pca_applied": add_pca,
-        "weight_strategy": weight_strategy,
-        "upset_weight": upset_weight,
         "features_used": final_feature_names
     }
-    with open(output_dir / f"{kernel}_config.json", "w") as f:
+    with open(output_dir / "hmm_config.json", "w") as f:
         json.dump(config, f, indent=4)
         
     print("Generating plots...")
     plot_optuna_history(study, reports_dir)
-    
-    if kernel == "linear":
-        plot_feature_importance(final_clf, final_feature_names, reports_dir)
-    else:
-        print(f"[!] Skipping Feature Importance Plot: 'coef_' is not available for the {kernel.upper()} kernel.")
     
     return final_clf, scaler

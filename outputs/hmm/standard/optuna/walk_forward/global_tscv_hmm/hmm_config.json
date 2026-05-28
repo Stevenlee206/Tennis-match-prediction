@@ -1,21 +1,14 @@
 {
-    "model_type": "RRF",
-    "optimizer": "Optuna",
+    "model_type": "HMM",
     "best_params": {
-        "n_estimators": 412,
-        "max_depth": 5,
-        "min_samples_split": 18,
-        "max_features": "sqrt",
-        "n_clusters": 8,
-        "ccp_alpha": 0.038875449740109674
+        "n_components": 3,
+        "covariance_type": "spherical",
+        "n_iter": 107,
+        "min_covar": 0.001456054261091978
     },
-    "train_accuracy": 0.5000095254424568,
-    "val_accuracy": 0.49588477366255146,
+    "train_accuracy": 0.6537311158103294,
+    "val_accuracy": 0.6411522633744856,
     "pca_applied": false,
-    "kmeans_applied": true,
-    "n_clusters": 8,
-    "weight_strategy": "static",
-    "upset_weight": 1.5,
     "features_used": [
         "elo_diff",
         "glicko2_diff",
@@ -63,25 +56,17 @@
         "round_F",
         "tourney_level_F",
         "surface_Carpet",
-        "round_BR",
-        "KMeans_Dist_C1",
-        "KMeans_Dist_C2",
-        "KMeans_Dist_C3",
-        "KMeans_Dist_C4",
-        "KMeans_Dist_C5",
-        "KMeans_Dist_C6",
-        "KMeans_Dist_C7",
-        "KMeans_Dist_C8"
+        "round_BR"
     ],
     "bias_metrics": {
-        "class_1_prediction_rate": 100.0,
-        "elo_reliance": 49.21,
+        "class_1_prediction_rate": 49.59,
+        "elo_reliance": 89.75,
         "elo_baseline_accuracy": 64.06,
-        "upset_prediction_accuracy": 50.67,
-        "rank_reliance": 49.35,
-        "final_accuracy": 49.69,
-        "mcc": 0.0,
-        "brier_score": 0.25,
-        "roc_auc": 0.5
+        "upset_prediction_accuracy": 15.08,
+        "rank_reliance": 81.45,
+        "final_accuracy": 64.64,
+        "mcc": 0.2928,
+        "brier_score": 0.2764,
+        "roc_auc": 0.7096
     }
 }
