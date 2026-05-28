@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from pathlib import Path
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.mixture import GaussianMixture
@@ -9,6 +10,10 @@ from sklearn.svm import LinearSVC
 from sklearn.metrics import accuracy_score
 # Import your existing preprocessing pipeline
 from src.preprocessing.preprocessing import Preprocessing
+from src.utils.paths import resolve_output_base
+
+OUTPUT_DIR = resolve_output_base(Path.cwd()) / "reports" / "figures" / "legacy"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 def run_svm_gmm_search(min_components=3, max_components=25):
     print(f"\n{'='*70}")
@@ -115,7 +120,7 @@ def run_svm_gmm_search(min_components=3, max_components=25):
                  fontsize=10, ha='center')
 
     plt.tight_layout()
-    plt.savefig('svm_gmm_search.png', dpi=300)
+    plt.savefig(OUTPUT_DIR / 'svm_gmm_search.png', dpi=300)
     print("-> Graph saved successfully as 'svm_gmm_search.png'!")
     
     plt.show()

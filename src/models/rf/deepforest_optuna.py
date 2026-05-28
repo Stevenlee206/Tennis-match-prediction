@@ -13,6 +13,7 @@ from sklearn.decomposition import PCA
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import accuracy_score
+from src.utils.paths import ensure_writable_path
 
 # ==========================================
 # Plotting Utilities
@@ -172,8 +173,8 @@ def objective(trial, X_train, y_train, X_val, y_val, bounds, add_pca=False, vali
 def run_deepforest_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_trials=30, add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0, 
                             max_layers_min=2, max_layers_max=8, n_trees_min=50, n_trees_max=200, max_depth_min=5, max_depth_max=30, n_splits=3, tscv_test_size=None):
     
-    output_dir = Path(output_dir)
-    reports_dir = Path(reports_dir)
+    output_dir = ensure_writable_path(output_dir)
+    reports_dir = ensure_writable_path(reports_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     reports_dir.mkdir(parents=True, exist_ok=True)
 

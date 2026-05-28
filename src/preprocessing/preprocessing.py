@@ -36,10 +36,12 @@ class Preprocessing:
         data = self._load()
         
         stat_cols = [c for c in data.columns if c.startswith(('w_', 'l_'))]
-        data = data.dropna(subset=stat_cols)
+        data = data.dropna(subset=stat_cols).copy()
 
         if 'tourney_date' in data.columns:
-            data['tourney_date'] = pd.to_datetime(data['tourney_date'], format='%Y%m%d', errors='coerce')
+            data = data.drop(columns=['tourney_date']).assign(
+                tourney_date=pd.to_datetime(data['tourney_date'], format='%Y%m%d', errors='coerce')
+            )
         data = data.sort_values('tourney_date').reset_index(drop=True)
         
         # --- UPDATED: Calculate Train Split Threshold based on dynamic ratio ---

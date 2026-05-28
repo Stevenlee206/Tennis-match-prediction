@@ -17,6 +17,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import accuracy_score
+from src.utils.paths import ensure_writable_path
 
 # ==========================================
 # PyTorch Model & Custom Loss
@@ -322,8 +323,8 @@ def run_pytorch_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Executing PyTorch Pipeline on: {device.upper()}")
 
-    output_dir = Path(output_dir)
-    reports_dir = Path(reports_dir)
+    output_dir = ensure_writable_path(output_dir)
+    reports_dir = ensure_writable_path(reports_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     reports_dir.mkdir(parents=True, exist_ok=True)
 

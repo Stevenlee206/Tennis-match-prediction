@@ -2,10 +2,14 @@ import argparse
 from pathlib import Path
 from sklearn.model_selection import train_test_split
 from src.preprocessing.preprocessing import Preprocessing
+from src.config.hmm_config import HMM_DEFAULT_N_TRIALS, HMM_TUNING
+from src.utils.paths import resolve_output_base
 import joblib
 import json
 import numpy as np
 from sklearn.metrics import accuracy_score, classification_report, matthews_corrcoef, brier_score_loss, roc_auc_score
+
+
 def evaluate_model_bias(y_true, y_pred, X_raw, y_prob=None):
     """
     Calculates bias metrics and returns them as a dictionary for JSON logging.
@@ -103,7 +107,7 @@ def main():
     parser.add_argument("--val_size", type=float, default=0.20, help="Validation set ratio (for holdout)")
     parser.add_argument("--n_splits", type=int, default=5, help="Number of TimeSeries CV splits for walk-forward")
     
-    parser.add_argument("--model", type=str, choices=["svm", "rf", "pytorch_svm", "tabnet", "deepforest", "pytorch_mlp"], default="svm", help="Algorithm to use")    
+    parser.add_argument("--model", type=str, choices=["svm", "rf", "pytorch_svm", "tabnet", "deepforest", "pytorch_mlp", "hmm"], default="svm", help="Algorithm to use")    
     parser.add_argument("--torch_opt", type=str, choices=["adam", "rmsprop", "sgd", "sgd_nesterov"], default="adam", help="Optimizer for PyTorch SVM")
     parser.add_argument("--torch_sched", type=str, choices=["constant", "cosine", "step", "plateau"], default="cosine", help="Learning rate scheduler for PyTorch SVM")
     parser.add_argument("--batch_size", type=int, default=64, help="Batch size for PyTorch DataLoaders")
@@ -119,7 +123,9 @@ def main():
     parser.add_argument("--lr_schedule", type=str, choices=["adaptive", "optimal", "invscaling", "constant"], default="adaptive", help="Learning rate schedule for SGD mode.")
     
     # Optimizer Params (Remaining params unchanged)
-    parser.add_argument("--n_trials", type=int, default=30)
+    parser.add_argument("--n_trials", type=int, default=HMM_DEFAULT_N_TRIALS)
+    parser.add_argument("--n_jobs", type=int, default=4, help="Parallel jobs for Optuna trials")
+    parser.add_argument("--resume", action="store_true", help="Resume Optuna study if a previous DB exists")
     parser.add_argument("--particles", type=int, default=15)
     parser.add_argument("--iterations", type=int, default=20)
     parser.add_argument("--population", type=int, default=20)
@@ -140,6 +146,12 @@ def main():
     parser.add_argument("--df_n_trees_max", type=int, default=200)
     parser.add_argument("--df_depth_min", type=int, default=5)
     parser.add_argument("--df_depth_max", type=int, default=30)
+    parser.add_argument("--hmm_n_components_min", type=int, default=HMM_TUNING.n_components_min)
+    parser.add_argument("--hmm_n_components_max", type=int, default=HMM_TUNING.n_components_max)
+    parser.add_argument("--hmm_n_iter_min", type=int, default=HMM_TUNING.n_iter_min)
+    parser.add_argument("--hmm_n_iter_max", type=int, default=HMM_TUNING.n_iter_max)
+    parser.add_argument("--hmm_seq_len_min", type=int, default=HMM_TUNING.seq_len_min)
+    parser.add_argument("--hmm_seq_len_max", type=int, default=HMM_TUNING.seq_len_max)
     parser.add_argument("--weight_strategy", type=str, choices=["none", "static", "magnitude", "temporal"], default="none")
     parser.add_argument("--upset_weight", type=float, default=1.5)
     args = parser.parse_args()
@@ -149,6 +161,8 @@ def main():
         raise ValueError("Error: SGD mode is currently only implemented for SVM.")
     if args.mode == "sgd" and args.kernel != "linear":
         raise ValueError("Error: SGD mode only supports the 'linear' kernel.")
+    if args.model == "hmm" and args.optimizer != "optuna":
+        raise ValueError("Error: HMM currently only supports the Optuna optimizer.")
 
     print("==============================================")
     print(f" ATP Tennis Prediction")
@@ -196,7 +210,7 @@ def main():
     # Calculate the precise integer length of the test set to pass to TSCV down the line
     tscv_test_size = len(X_test)
     
-    BASE_DIR = Path(__file__).resolve().parent
+    BASE_DIR = resolve_output_base(Path(__file__).resolve().parent)
     
     # [Path Routing & Imports remain exactly the same as your code]
     if args.model == "svm":
@@ -211,6 +225,8 @@ def main():
         model_subpath = "tabnet"
     elif args.model == "deepforest":
         model_subpath = "deepforest"
+    elif args.model == "hmm":
+        model_subpath = "hmm"
     
     BASE_OUT = BASE_DIR / "outputs" / model_subpath / args.mode / args.optimizer / args.validation
     BASE_REP = BASE_DIR / "reports" / "figures" / model_subpath / args.mode / args.optimizer / args.validation
@@ -222,6 +238,8 @@ def main():
         from src.models.mlp.mlp_pytorch_optuna import run_pytorch_mlp_pipeline as run_pipeline
     elif args.model == "deepforest":
         from src.models.rf.deepforest_optuna import run_deepforest_pipeline as run_pipeline
+    elif args.model == "hmm":
+        from src.hpo.hmm_optuna import run_hmm_hpo as run_pipeline
     elif args.model == "svm":
         if args.optimizer == "pso":
             from src.models.svm.svm_sklearn_pso import run_svm_pipeline as run_pipeline
@@ -300,6 +318,21 @@ def main():
                          n_trees_min=args.df_n_trees_min, n_trees_max=args.df_n_trees_max,
                          max_depth_min=args.df_depth_min, max_depth_max=args.df_depth_max)
 
+        elif args.model == "hmm":
+            run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP,
+                         n_trials=args.n_trials,
+                         n_jobs=args.n_jobs,
+                         n_components_min=args.hmm_n_components_min,
+                         n_components_max=args.hmm_n_components_max,
+                         n_iter_min=args.hmm_n_iter_min,
+                         n_iter_max=args.hmm_n_iter_max,
+                         seq_len_min=args.hmm_seq_len_min,
+                         seq_len_max=args.hmm_seq_len_max,
+                         add_pca=args.add_pca,
+                         validation=args.validation,
+                         max_epochs=args.hmm_n_iter_max,
+                         resume=args.resume)
+
         elif args.model == "rf":
             if args.optimizer == "pso":
                 run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, n_particles=args.particles, n_iterations=args.iterations, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, depth_min=args.rf_depth_min, depth_max=args.rf_depth_max)
@@ -332,6 +365,8 @@ def main():
             model_name, scaler_name, config_name = "mlp_pytorch_model.pth", "mlp_pytorch_scaler.joblib", "mlp_pytorch_config.json"
         elif args.model == "deepforest":
             model_name, scaler_name, config_name = "deepforest_model.joblib", "deepforest_scaler.joblib", "deepforest_config.json"
+        elif args.model == "hmm":
+            model_name, scaler_name, config_name = "hmm_model.joblib", "hmm_scaler.joblib", "hmm_config.json"
         else:
             model_name, scaler_name, config_name = f"{args.rf_variant}_model.joblib", f"{args.rf_variant}_scaler.joblib", f"{args.rf_variant}_config.json"
             
@@ -344,6 +379,8 @@ def main():
         if check_path.exists() and scaler_path.exists():
             scaler = joblib.load(scaler_path)
             X_val_scaled = scaler.transform(X_val)
+            X_train_context = X_train.drop(columns=['is_augmented'], errors='ignore')
+            X_train_scaled = scaler.transform(X_train_context)
             
             # ---> NEW: Load the model's actual config to dictate architecture
             with open(config_path, 'r') as f:
@@ -363,6 +400,7 @@ def main():
                 if pca_path.exists():
                     pca = joblib.load(pca_path)
                     X_val_scaled = pca.transform(X_val_scaled)
+                    X_train_scaled = pca.transform(X_train_scaled)
                 else:
                     print(f"⚠️ Warning: PCA enabled but {pca_name} not found at {pca_path}!")
 
@@ -439,6 +477,10 @@ def main():
                 # We must truncate the evaluation data to match!
                 y_val = y_val.iloc[4:]
                 X_val = X_val.iloc[4:]
+            elif args.model == "hmm":
+                best_model = joblib.load(model_path)
+                y_pred_val = best_model.predict(X_val_scaled, context=X_train_scaled)
+                y_prob_val = best_model.predict_proba(X_val_scaled, context=X_train_scaled)[:, 1]
             else: # SKLearn / DeepForest models
                 best_model = joblib.load(model_path)
                 y_pred_val = best_model.predict(X_val_scaled)
@@ -489,6 +531,21 @@ def main():
                          n_trees_min=args.df_n_trees_min, n_trees_max=args.df_n_trees_max,
                          max_depth_min=args.df_depth_min, max_depth_max=args.df_depth_max,
                          n_splits=args.n_splits, tscv_test_size=tscv_test_size) # <-- NEW
+
+        elif args.model == "hmm":
+            run_pipeline(X_train_val_pool, y_train_val_pool, None, None, global_out, global_rep,
+                         n_trials=args.n_trials,
+                         n_jobs=args.n_jobs,
+                         n_components_min=args.hmm_n_components_min,
+                         n_components_max=args.hmm_n_components_max,
+                         n_iter_min=args.hmm_n_iter_min,
+                         n_iter_max=args.hmm_n_iter_max,
+                         seq_len_min=args.hmm_seq_len_min,
+                         seq_len_max=args.hmm_seq_len_max,
+                         add_pca=args.add_pca,
+                         validation=args.validation,
+                         n_splits=args.n_splits,
+                         tscv_test_size=tscv_test_size)
                          
         elif args.model == "pytorch_mlp":
             run_pipeline(X_train_val_pool, y_train_val_pool, None, None, global_out, global_rep, 
@@ -528,6 +585,8 @@ def main():
             model_name, scaler_name, config_name = "mlp_pytorch_model.pth", "mlp_pytorch_scaler.joblib", "mlp_pytorch_config.json"
         elif args.model == "deepforest":
             model_name, scaler_name, config_name = "deepforest_model.joblib", "deepforest_scaler.joblib", "deepforest_config.json"
+        elif args.model == "hmm":
+            model_name, scaler_name, config_name = "hmm_model.joblib", "hmm_scaler.joblib", "hmm_config.json"
         elif args.model == "tabnet":
             model_name, scaler_name, config_name = "tabnet_model.zip", "tabnet_scaler.joblib", "tabnet_config.json"
         else:
@@ -547,6 +606,8 @@ def main():
             y_test_eval = y_test.copy()
             
             X_test_scaled = scaler.transform(X_test_eval)
+            X_train_context = X_train_val_pool.drop(columns=['is_augmented'], errors='ignore')
+            X_train_context_scaled = scaler.transform(X_train_context)
             
             # ---> NEW: Load the model's actual config to dictate architecture
             with open(config_path, 'r') as f:
@@ -565,6 +626,7 @@ def main():
                 if pca_path.exists():
                     pca = joblib.load(pca_path)
                     X_test_scaled = pca.transform(X_test_scaled) 
+                    X_train_context_scaled = pca.transform(X_train_context_scaled)
                     
             if cfg.get('kmeans_applied', False):
                 if args.model in ["pytorch_svm", "pytorch_mlp", "tabnet", "deepforest"]:
@@ -630,6 +692,10 @@ def main():
             
                 y_test_eval = y_test_eval.iloc[4:]
                 X_test_eval = X_test_eval.iloc[4:]
+            elif args.model == "hmm":
+                best_model = joblib.load(model_path)
+                y_pred_val = best_model.predict(X_test_scaled, context=X_train_context_scaled)
+                y_prob_val = best_model.predict_proba(X_test_scaled, context=X_train_context_scaled)[:, 1]
             
             else: # SKLearn / DeepForest / TabNet
                 best_model = joblib.load(model_path)

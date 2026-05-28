@@ -4,7 +4,9 @@ import numpy as np
 def apply_historical_serve_metrics(df, train_idx: int):
     """Calculates 365-day rolling historical averages for all Gao serve metrics."""
     if not pd.api.types.is_datetime64_any_dtype(df['tourney_date']):
-        df['tourney_date'] = pd.to_datetime(df['tourney_date'], format='%Y%m%d')
+        df = df.drop(columns=['tourney_date']).assign(
+            tourney_date=pd.to_datetime(df['tourney_date'], format='%Y%m%d')
+        )
 
     # Calculate 2nd Serves In for the current match
     df['w_2ndIn'] = df['w_svpt'] - df['w_1stIn'] - df['w_df']

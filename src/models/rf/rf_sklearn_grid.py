@@ -8,6 +8,7 @@ from pathlib import Path
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
+from src.utils.paths import ensure_writable_path
 
 def plot_grid_heatmap(results_df, save_path):
     pivot_table = results_df.pivot(index="max_depth", columns="n_estimators", values="accuracy")
@@ -30,8 +31,8 @@ def plot_feature_importance(clf, feature_names, save_path):
     plt.close()
 
 def run_rf_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_est_min=50, n_est_max=500, n_est_steps=5, depth_min=5, depth_max=50, depth_steps=5):
-    output_dir = Path(output_dir)
-    reports_dir = Path(reports_dir)
+    output_dir = ensure_writable_path(output_dir)
+    reports_dir = ensure_writable_path(reports_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     reports_dir.mkdir(parents=True, exist_ok=True)
 

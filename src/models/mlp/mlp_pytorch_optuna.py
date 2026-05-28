@@ -16,6 +16,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import TimeSeriesSplit
+from src.utils.paths import ensure_writable_path
 import random
 def set_seed(seed=42):
     torch.manual_seed(seed)
@@ -216,7 +217,7 @@ def objective(trial, X_train_processed, y_train, X_val_processed, y_val, epochs,
         best_val_acc, best_epoch = train_model(model, train_loader, val_loader, optimizer, epochs, device)
         trial.set_user_attr("best_epoch", best_epoch)
         
-        return best_val_acc
+        return float(best_val_acc)
 
     elif validation == "walk_forward":
         tscv = TimeSeriesSplit(n_splits=5)
@@ -245,7 +246,9 @@ def objective(trial, X_train_processed, y_train, X_val_processed, y_val, epochs,
             best_epochs.append(best_ep)
             
         trial.set_user_attr("best_epoch", int(np.mean(best_epochs)))
-        return np.mean(fold_accuracies)
+        return float(np.mean(fold_accuracies))
+
+    raise ValueError(f"Unsupported validation mode: {validation}")
 
 # ==========================================
 # MAIN PIPELINE EXECUTION
@@ -254,8 +257,8 @@ def run_pytorch_mlp_pipeline(X_train, y_train, X_val, y_val, output_dir, reports
                              n_trials=30, epochs=100, batch_size=64, add_pca=False, 
                              validation="holdout", weight_strategy="none", upset_weight=1.0):
     
-    output_dir = Path(output_dir)
-    reports_dir = Path(reports_dir)
+    output_dir = ensure_writable_path(output_dir)
+    reports_dir = ensure_writable_path(reports_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     reports_dir.mkdir(parents=True, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

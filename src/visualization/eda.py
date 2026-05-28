@@ -5,12 +5,14 @@ import seaborn as sns
 from pathlib import Path
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
+from src.utils.paths import resolve_output_base
 # ==========================================
 # Directory Setup
 # ==========================================
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+OUTPUT_ROOT = resolve_output_base(PROJECT_ROOT)
 DATA_PATH = PROJECT_ROOT / "data" / "processed" / "train.csv"
-REPORTS_DIR = PROJECT_ROOT / "reports" / "figures" / "eda"
+REPORTS_DIR = OUTPUT_ROOT / "reports" / "figures" / "eda"
 
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 

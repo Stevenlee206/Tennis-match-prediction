@@ -1,0 +1,28 @@
+{
+    "model_type": "HMM",
+    "best_params": {
+        "n_components": 5,
+        "covariance_type": "diag",
+        "tol": 0.0012808762381587612,
+        "min_covar": 0.0009009192750333466,
+        "sequence_length": 5
+    },
+    "fold_best_epochs": [
+        1
+    ],
+    "median_best_epoch": 1,
+    "train_accuracy": 0.55,
+    "val_accuracy": 0.2,
+    "pca_applied": false,
+    "sequence_length": 5,
+    "features_used": [
+        "f0",
+        "f1",
+        "f2",
+        "f3",
+        "f4",
+        "f5"
+    ],
+    "early_stopping_patience": 50,
+    "max_epochs": 1
+}

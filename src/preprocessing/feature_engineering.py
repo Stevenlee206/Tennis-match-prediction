@@ -51,10 +51,12 @@ def build_basic_features(df: pd.DataFrame) -> pd.DataFrame:
     # =========================
 
     if "tourney_date" in data.columns:
-        data["tourney_date"] = pd.to_datetime(
-            data["tourney_date"],
-            format="%Y%m%d",
-            errors="coerce"
+        data = data.drop(columns=["tourney_date"]).assign(
+            tourney_date=pd.to_datetime(
+                data["tourney_date"],
+                format="%Y%m%d",
+                errors="coerce"
+            )
         )
 
         # giữ nguyên year/month

@@ -71,6 +71,7 @@ except ImportError:
     HAS_OBLIQUE = False
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.ensemble._forest import _generate_sample_indices
+from src.utils.paths import ensure_writable_path
 
 class WeightedRandomForestClassifier(RandomForestClassifier):
     def __init__(self, **kwargs):
@@ -353,8 +354,8 @@ def run_rf_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
                     n_trials=30, n_est_min=50, n_est_max=500, depth_min=5, depth_max=50, 
                     variant="rf", add_pca=False, add_kmeans=False, n_clusters_min=2, n_clusters_max=10, 
                     validation="holdout", weight_strategy="none", upset_weight=1.0, n_splits=3, tscv_test_size=None):
-    output_dir = Path(output_dir)
-    reports_dir = Path(reports_dir)
+    output_dir = ensure_writable_path(output_dir)
+    reports_dir = ensure_writable_path(reports_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     reports_dir.mkdir(parents=True, exist_ok=True)
 
