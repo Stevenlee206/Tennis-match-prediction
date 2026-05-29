@@ -6,6 +6,18 @@ def drop_high_missing_columns(df: pd.DataFrame, train_idx: int, threshold: float
     missing_ratio = data.iloc[:train_idx].isnull().mean()
     # TRANSFORM
     cols_to_drop = missing_ratio[missing_ratio > threshold].index.tolist()
+    
+    # Do not drop columns required for imputation or feature engineering
+    protected_cols = {
+        'minutes', 'surface', 'tourney_date', 'winner_id', 'loser_id',
+        'winner_hand', 'loser_hand', 'winner_rank', 'loser_rank', 
+        'winner_rank_points', 'loser_rank_points', 'winner_age', 'loser_age',
+        'winner_ht', 'loser_ht',
+        'w_ace', 'w_df', 'w_svpt', 'w_1stIn', 'w_1stWon', 'w_2ndWon', 'w_SvGms', 'w_bpSaved', 'w_bpFaced',
+        'l_ace', 'l_df', 'l_svpt', 'l_1stIn', 'l_1stWon', 'l_2ndWon', 'l_SvGms', 'l_bpSaved', 'l_bpFaced'
+    }
+    cols_to_drop = [c for c in cols_to_drop if c not in protected_cols]
+    
     data = data.drop(columns=cols_to_drop)
     return data
 

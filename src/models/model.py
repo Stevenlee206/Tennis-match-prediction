@@ -29,7 +29,7 @@ class TennisNet(nn.Module):
     An improved Tabular ResNet model that preserves compatibility with
     the existing training pipeline but achieves significantly better classification performance.
     """
-    def __init__(self, input_dim, hidden_dim=128, num_blocks=2, dropout=0.2):
+    def __init__(self, input_dim, hidden_dim=128, num_blocks=0, dropout=0.2):
         super(TennisNet, self).__init__()
         
         self.first_layer = nn.Sequential(
