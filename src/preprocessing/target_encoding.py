@@ -59,7 +59,7 @@ def create_target(df: pd.DataFrame, random_state: int = 42, augment: bool = True
         'elo_diff', 'elo_hard_diff', 'elo_clay_diff', 'elo_grass_diff', 
         'glicko2_diff', 'glicko2_hard_diff', 'glicko2_clay_diff', 'glicko2_grass_diff', 
         'form_diff',
-        'h2h_advantage_diff', 'hand_win_pct_diff',
+        'hand_win_pct_diff',
     ]
 
     for col in elo_form_matchup_cols:
@@ -67,12 +67,16 @@ def create_target(df: pd.DataFrame, random_state: int = 42, augment: bool = True
             data[col] = data[col] * sign
 
     # =========================
-    # 3. Same hand flag
+    # 3. Same hand flag & Raw H2H Rates
     # =========================
     if {'winner_hand', 'loser_hand'}.issubset(data.columns):
         p1_hand = np.where(p1_is_winner, data['winner_hand'], data['loser_hand'])
         p2_hand = np.where(p1_is_winner, data['loser_hand'],  data['winner_hand'])
         data['same_hand_flag'] = (p1_hand == p2_hand).astype(int)
+        
+    if {'w_h2h_rate', 'l_h2h_rate'}.issubset(data.columns):
+        data['p1_h2h_rate'] = np.where(p1_is_winner, data['w_h2h_rate'], data['l_h2h_rate'])
+        data['p2_h2h_rate'] = np.where(p1_is_winner, data['l_h2h_rate'], data['w_h2h_rate'])
 
     # =========================
     # 4. Target & Cleanup
@@ -83,7 +87,7 @@ def create_target(df: pd.DataFrame, random_state: int = 42, augment: bool = True
         'w_AceVsDf', 'l_AceVsDf', 'w_FirstIn1stServe', 'l_FirstIn1stServe', 
         'w_FirstWonFirstIn', 'l_FirstWonFirstIn', 'w_SecondWonSecondIn', 'l_SecondWonSecondIn',
         'w_cum_minutes', 'l_cum_minutes', 'w_ClutchFactor', 'l_ClutchFactor',
-        'winner_glicko2', 'loser_glicko2'
+        'winner_glicko2', 'loser_glicko2', 'w_h2h_rate', 'l_h2h_rate'
     ]
     data = data.drop(columns=[c for c in raw_cols_to_drop if c in data.columns])
 

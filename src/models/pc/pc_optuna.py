@@ -226,8 +226,11 @@ def objective(trial, X_train, y_train, X_val, y_val, add_pca=False, validation="
     epochs = trial.suggest_categorical("epochs", [20, 50, 100])
     
     if validation == "holdout":
-        v_drop_cols = ['is_augmented'] if 'is_augmented' in X_val.columns else []
-        t_drop_cols = ['is_augmented'] if 'is_augmented' in X_train.columns else []
+        v_drop_cols = ['is_augmented', 'winner_name', 'loser_name', 'match_id'] 
+        v_drop_cols = [c for c in v_drop_cols if c in X_val.columns]
+        t_drop_cols = ['is_augmented', 'winner_name', 'loser_name', 'match_id']
+        t_drop_cols = [c for c in t_drop_cols if c in X_train.columns]
+        
         X_t_clean = X_train.drop(columns=t_drop_cols, errors='ignore')
         X_v_clean = X_val.drop(columns=v_drop_cols, errors='ignore')
 
@@ -263,8 +266,10 @@ def objective(trial, X_train, y_train, X_val, y_val, add_pca=False, validation="
                 y_v_cv = y_v_cv[X_v_cv['is_augmented'] == 0]
                 X_v_cv = X_v_cv[X_v_cv['is_augmented'] == 0]
             
-            v_drop_cols = ['is_augmented'] if 'is_augmented' in X_v_cv.columns else []
-            t_drop_cols = ['is_augmented'] if 'is_augmented' in X_t_cv.columns else []
+            v_drop_cols = ['is_augmented', 'winner_name', 'loser_name', 'match_id']
+            v_drop_cols = [c for c in v_drop_cols if c in X_v_cv.columns]
+            t_drop_cols = ['is_augmented', 'winner_name', 'loser_name', 'match_id']
+            t_drop_cols = [c for c in t_drop_cols if c in X_t_cv.columns]
             
             X_v_clean = X_v_cv.drop(columns=v_drop_cols, errors='ignore')
             X_t_clean = X_t_cv.drop(columns=t_drop_cols, errors='ignore')
@@ -349,8 +354,8 @@ def run_pc_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
     # Weights for final train
     final_weights = generate_sample_weights(X_t_eval, y_t_eval, weight_strategy, upset_weight)
 
-    # Drop flag
-    drop_c = ['is_augmented', 'match_id']
+    # 4. Prepare data for evaluation
+    drop_c = ['is_augmented', 'match_id', 'winner_name', 'loser_name']
     X_t_clean = X_t_eval.drop(columns=[c for c in drop_c if c in X_t_eval.columns])
     
     scaler = StandardScaler().fit(X_t_clean)

@@ -127,7 +127,6 @@ def main():
     args = parser.parse_args()
     
     if args.config:
-        import json
         with open(args.config, 'r') as f:
             cfg = json.load(f)
         for k, v in cfg.items():
@@ -185,7 +184,10 @@ def main():
     # --- CLEANUP GLOBAL TEST SET ---
     if 'is_augmented' in X_test.columns:
         y_test = y_test[X_test['is_augmented'] == 0]
-        X_test = X_test[X_test['is_augmented'] == 0].drop(columns=['is_augmented'])
+        X_test = X_test[X_test['is_augmented'] == 0]
+    
+    # Drop string columns before evaluation
+    X_test = X_test.drop(columns=['is_augmented', 'winner_name', 'loser_name', 'match_id'], errors='ignore')
         
     print(f"\nGlobal Splits -> Modeling Pool: {len(X_train_val_pool)} | Quarantined Test: {len(X_test)}")
     BASE_DIR = Path(__file__).resolve().parent
@@ -354,7 +356,7 @@ def main():
 
         if check_path.exists() and scaler_path.exists():
             scaler = joblib.load(scaler_path)
-            X_val_clean = X_val.drop(columns=['is_augmented'], errors='ignore')
+            X_val_clean = X_val.drop(columns=['is_augmented', 'match_id', 'winner_name', 'loser_name'], errors='ignore')
             X_val_scaled = scaler.transform(X_val_clean)
             
             # Handle PCA if enabled
@@ -573,7 +575,10 @@ def main():
             # --- PURGE AUGMENTED DATA FROM EVALUATION ---
             if 'is_augmented' in X_val_chunk.columns:
                 y_val_chunk = y_val_chunk[X_val_chunk['is_augmented'] == 0]
-                X_val_chunk = X_val_chunk[X_val_chunk['is_augmented'] == 0].drop(columns=['is_augmented'])
+                X_val_chunk = X_val_chunk[X_val_chunk['is_augmented'] == 0]
+                
+            # Drop string columns before evaluation
+            X_val_chunk = X_val_chunk.drop(columns=['is_augmented', 'winner_name', 'loser_name', 'match_id'], errors='ignore')
             
             X_val_scaled = scaler.transform(X_val_chunk)
             

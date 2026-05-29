@@ -17,6 +17,7 @@ from src.preprocessing.context_features import apply_fatigue_and_clutch_metrics
 # ---> IMPORT ONLY THE SERVE METRICS FUNCTION <---
 from src.preprocessing.gao_features import apply_historical_serve_metrics
 from src.preprocessing.matchup_features import apply_matchup_topography
+from src.preprocessing.rating.h2h_calculator import apply_advanced_h2h
 class Preprocessing:
     def __init__(self):
         self.data = None
@@ -59,6 +60,7 @@ class Preprocessing:
         data = apply_historical_serve_metrics(data, train_split_idx)
         data = apply_fatigue_and_clutch_metrics(data, train_split_idx)
         data = apply_matchup_topography(data)
+        data = apply_advanced_h2h(data, alpha=0.01, c=2.0)
         
         data = create_target(data, augment = True)
         
