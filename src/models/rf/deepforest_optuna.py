@@ -14,13 +14,15 @@ from sklearn.model_selection import TimeSeriesSplit
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import accuracy_score
 
-# ==========================================
 # Plotting Utilities
-# ==========================================
-np.int = int      
+np.int = int
 np.float = float  
 np.bool = bool    
 def plot_optuna_history(study, save_path):
+    """
+    Generates and saves a line chart visualizing the validation accuracy across
+    all Optuna optimization trials over time.
+    """
     plt.figure(figsize=(10, 6))
     trials = study.trials_dataframe()
     if not trials.empty and "value" in trials.columns:
@@ -35,7 +37,10 @@ def plot_optuna_history(study, save_path):
 
 def plot_feature_importance(model, X, y, feature_names, save_path):
     print("Calculating permutation importance (this may take a moment)...")
-    
+    """
+    Calculates feature importance using the permutation method and saves
+    a bar chart ranking the features by their impact on model accuracy
+    """
     # Use permutation importance since Deep Forest doesn't expose native importances
     result = permutation_importance(model, X, y, n_repeats=5, random_state=42, n_jobs=-1)
     importances = result.importances_mean
@@ -54,10 +59,12 @@ def plot_feature_importance(model, X, y, feature_names, save_path):
     plt.savefig(save_path / "deepforest_feature_importance.png", dpi=300)
     plt.close()
 
-# ==========================================
 # Weight Generation (Matched Logic)
-# ==========================================
 def generate_sample_weights(X_raw, y_raw, strategy="none", base_weight=1.0):
+    """
+    Assigns custom weights to training samples, applying higher weights to "upset" matches
+    based on Elo rating differences and the selected weighting strategy.
+    """
     n_samples = len(y_raw)
     weights = np.ones(n_samples)
     
@@ -83,10 +90,8 @@ def generate_sample_weights(X_raw, y_raw, strategy="none", base_weight=1.0):
 
     return weights
 
-# ==========================================
 # Optimization Objective
-# ==========================================
-def objective(trial, X_train, y_train, X_val, y_val, bounds, add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0, n_splits=3, tscv_test_size=None):    
+def objective(trial, X_train, y_train, X_val, y_val, bounds, add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0, n_splits=3, tscv_test_size=None):
     # Deep Forest Hyperparameters using dynamic bounds from CLI
     params = {
         "n_bins": trial.suggest_int("n_bins", 128, 255),
@@ -99,9 +104,7 @@ def objective(trial, X_train, y_train, X_val, y_val, bounds, add_pca=False, vali
         "n_jobs": -1
     }
 
-    # ==========================================
     # STRATEGY 1: STANDARD HOLDOUT
-    # ==========================================
     if validation == "holdout":
         scaler = StandardScaler()
         X_t_scaled = scaler.fit_transform(X_train)
@@ -122,11 +125,8 @@ def objective(trial, X_train, y_train, X_val, y_val, bounds, add_pca=False, vali
         val_preds = clf.predict(X_v_processed)
         return accuracy_score(y_val, val_preds)
 
-    # ==========================================
     # STRATEGY 2: WALK-FORWARD (TSCV)
-    # ==========================================
     elif validation == "walk_forward":
-        # ---> UPDATED HERE <---
         tscv = TimeSeriesSplit(n_splits=n_splits, test_size=tscv_test_size)
         fold_accuracies = []
         
@@ -155,10 +155,8 @@ def objective(trial, X_train, y_train, X_val, y_val, bounds, add_pca=False, vali
             
         return np.mean(fold_accuracies)
 
-# ==========================================
 # Main Execution Pipeline
-# ==========================================
-def run_deepforest_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_trials=30, add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0, 
+def run_deepforest_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_trials=30, add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0,
                             max_layers_min=2, max_layers_max=8, n_trees_min=50, n_trees_max=200, max_depth_min=5, max_depth_max=30, n_splits=3, tscv_test_size=None):
     
     output_dir = Path(output_dir)

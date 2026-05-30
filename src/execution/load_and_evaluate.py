@@ -2,8 +2,7 @@ import json
 import joblib
 import numpy as np
 from pathlib import Path
-from bias_analysis import evaluate_model_bias,append_metrics_to_config
-
+from src.execution.bias_analysis import evaluate_model_bias, append_metrics_to_config
 def _get_file_names(args):
     """Xác định tên file model, scaler và config dựa trên thuật toán."""
     if args.model == "svm":
@@ -23,8 +22,12 @@ def _get_file_names(args):
     elif args.model == "tabnet":
         return "tabnet_model.zip", "tabnet_scaler.joblib", "tabnet_config.json"
 
+    elif args.model == "xgboost":
+        return "xgboost_model.joblib", "xgboost_scaler.joblib", "xgboost_config.json"
+
     else:  # Random Forest variants
         return f"{args.rf_variant}_model.joblib", f"{args.rf_variant}_scaler.joblib", f"{args.rf_variant}_config.json"
+
 
 
 def _get_feature_prefix(args):
@@ -147,4 +150,4 @@ def load_and_evaluate_model(args, X_eval, y_eval, out_dir):
     if config_path.exists():
         append_metrics_to_config(config_path, bias_metrics)
     else:
-        print(f"⚠️ Không tìm thấy {config_name} để ghi kết quả đánh giá.")
+        print(f"Không tìm thấy {config_name} để ghi kết quả đánh giá.")

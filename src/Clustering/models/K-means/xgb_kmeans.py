@@ -42,7 +42,7 @@ def run_kmeans_cluster_search(min_clusters=3, max_clusters=25):
     X_test_scaled = scaler.transform(X_test)
 
     # --- Step 2: Calculate Baseline (No Clustering) ---
-    print("\n-> Calculating Baseline XGBoost Accuracy...")
+    print("\n-> Calculating Baseline xgboost Accuracy...")
     base_clf = XGBClassifier(
         n_estimators=300, max_depth=15, random_state=42, 
         n_jobs=-1, eval_metric='logloss'
@@ -75,7 +75,7 @@ def run_kmeans_cluster_search(min_clusters=3, max_clusters=25):
             X_train_aug[col_name] = train_distances[:, i]
             X_test_aug[col_name] = test_distances[:, i]
 
-        # Train Augmented XGBoost
+        # Train Augmented xgboost
         clf = XGBClassifier(
             n_estimators=300, max_depth=15, random_state=42, 
             n_jobs=-1, eval_metric='logloss'
@@ -108,7 +108,7 @@ def run_kmeans_cluster_search(min_clusters=3, max_clusters=25):
     ax.axhline(y=baseline_acc, color='#e74c3c', linestyle='--', linewidth=2, label=f'Baseline XGB ({baseline_acc:.2f}%)')
     
     # Aesthetics
-    ax.set_title('XGBoost Accuracy vs. Clustering Geometric Sub-Archetypes', fontsize=16, pad=15)
+    ax.set_title('xgboost Accuracy vs. Clustering Geometric Sub-Archetypes', fontsize=16, pad=15)
     ax.set_xlabel('Number of Clustering Clusters (k)', fontsize=12)
     ax.set_ylabel('Test Set Accuracy (%)', fontsize=12)
     ax.set_xticks(range(min_clusters, max_clusters + 1))

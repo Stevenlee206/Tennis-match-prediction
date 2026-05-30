@@ -11,9 +11,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score
 from sklearn.exceptions import ConvergenceWarning
 
-# ==========================================
 # Custom Genetic Algorithm Optimizer
-# ==========================================
 class GAHyperparameterTuner:
     def __init__(self, pop_size=20, n_generations=20, mutation_rate=0.2, crossover_rate=0.8):
         self.pop_size = pop_size
@@ -92,9 +90,7 @@ class GAHyperparameterTuner:
 
         return 10 ** gbest_position, gbest_score, history
 
-# ==========================================
 # Plotting Utilities
-# ==========================================
 def plot_ga_history(history, save_path):
     plt.figure(figsize=(10, 6))
     sns.lineplot(x=range(1, len(history)+1), y=history, marker="o", color='green')

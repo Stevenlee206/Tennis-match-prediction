@@ -5,7 +5,7 @@ from src.preprocessing.preprocessing import Preprocessing
 def prepare_data(args):
     """
     Args:
-        args: Đối tượng cấu hình từ argparse chứa test_size, val_size, n_splits, validation_mode
+        args: Configuration object from argparse contains test_size, val_size, n_splits, validation_mode
 
     Returns:
         X_train_val (DataFrame).
@@ -36,11 +36,11 @@ def prepare_data(args):
     X_full = data.drop(columns=['target', 'year'], errors='ignore')
     y_full = data['target']
     X_train_val_pool, X_test, y_train_val, y_test = train_test_split(
-        X_full, y_full, test_size=args.test_size, shuffle=False
-    )
+                                            X_full, y_full, test_size=args.test_size, shuffle=False
+                                                    )
 
 
-    # LỌC DỮ LIỆU TĂNG CƯỜNG KHỎI TẬP TEST (DE-AUGMENTATION)
+    # Filtering enhanced data from test sets (DE-AUGMENTATION)
     if 'is_augmented' in X_test.columns:
         y_test = y_test[X_test['is_augmented'] == 0]
         X_test = X_test[X_test['is_augmented'] == 0].drop(columns=['is_augmented'])
