@@ -14,49 +14,84 @@ def parse_arguments():
     # Models & feature engineering (k-means,pca) Config
     model_group = parser.add_argument_group("Core Model & Feature Engineering")
     model_group.add_argument("--model", type=str,
-                             choices=["svm", "rf", "pytorch_svm", "tabnet", "deepforest", "pytorch_mlp"], default="svm",
-                             help="Algorithm to use")
+                             choices=["svm", "rf", "pytorch_svm", "tabnet", "deepforest",
+                                      "pytorch_mlp","xgboost","decisiontree","adaboost"],
+                             default="svm",help="Algorithm to use")
+
     model_group.add_argument("--add_kmeans", action="store_true",
                              help="Apply KMeans clustering to add spatial features")
-    model_group.add_argument("--n_clusters", type=int, default=5, help="Number of clusters if using --add_kmeans")
+
+    model_group.add_argument("--n_clusters", type=int, default=5,
+                             help="Number of clusters if using --add_kmeans")
+
     model_group.add_argument("--add_pca", action="store_true",
                              help="Apply PCA for dimensionality reduction and denoising")
-    model_group.add_argument("--weight_strategy", type=str, choices=["none", "static", "magnitude", "temporal"],
+
+    model_group.add_argument("--weight_strategy", type=str,
+                             choices=["none", "static", "magnitude", "temporal"],
                              default="none", help="Sample weighting strategy")
-    model_group.add_argument("--upset_weight", type=float, default=1.5, help="Weight multiplier for upset matches")
+
+    model_group.add_argument("--upset_weight", type=float, default=1.5,
+                             help="Weight multiplier for upset matches")
 
     # Deep learning opt and params configuration
     opt_group = parser.add_argument_group("Global Optimizer & DL Params")
-    opt_group.add_argument("--optimizer", type=str, choices=["optuna", "pso", "ga", "grid"], default="optuna",
-                           help="Optimizer to tune hyperparameters")
-    opt_group.add_argument("--n_trials", type=int, default=30, help="Number of Optuna trials")
-    opt_group.add_argument("--epochs", type=int, default=100, help="Epochs for Neural Networks / SGD")
-    opt_group.add_argument("--batch_size", type=int, default=64, help="Batch size for PyTorch DataLoaders")
-    opt_group.add_argument("--torch_opt", type=str, choices=["adam", "rmsprop", "sgd", "sgd_nesterov"], default="adam",
-                           help="Optimizer for PyTorch models")
-    opt_group.add_argument("--torch_sched", type=str, choices=["constant", "cosine", "step", "plateau"],
+    opt_group.add_argument("--optimizer", type=str,
+                           choices=["optuna", "pso", "ga", "grid", "custom", "random"],
+                           default="optuna", help="Optimizer to tune hyperparameters")
+
+    # number of trials for optuna
+    opt_group.add_argument("--n_trials", type=int,
+                           default=30, help="Number of Optuna trials")
+
+    # epoch nums,batch_size for NN,SGD
+    opt_group.add_argument("--epochs", type=int, default=100,
+                           help="Epochs for Neural Networks / SGD")
+
+    opt_group.add_argument("--batch_size", type=int,
+                           default=64, help="Batch size for PyTorch DataLoaders")
+    # NN optimizer
+    opt_group.add_argument("--torch_opt", type=str,
+                           choices=["adam", "rmsprop", "sgd", "sgd_nesterov"],
+                           default="adam",help="Optimizer for PyTorch models")
+    # lr schedule
+    opt_group.add_argument("--torch_sched", type=str,
+                           choices=["constant", "cosine", "step", "plateau"],
                            default="cosine", help="LR scheduler for PyTorch models")
 
     # hyperparameter tuning configurations
 
     # PSO
-    opt_group.add_argument("--particles", type=int, default=15, help="Particles for PSO")
-    opt_group.add_argument("--iterations", type=int, default=20, help="Iterations for PSO")
+    opt_group.add_argument("--particles", type=int,
+                           default=15, help="Particles for PSO")
+    opt_group.add_argument("--iterations", type=int,
+                           default=20, help="Iterations for PSO")
 
     # GA
-    opt_group.add_argument("--population", type=int, default=20, help="Population size for GA")
-    opt_group.add_argument("--generations", type=int, default=15, help="Generations for GA")
+    opt_group.add_argument("--population", type=int,
+                           default=20, help="Population size for GA")
+    opt_group.add_argument("--generations", type=int,
+                           default=15, help="Generations for GA")
 
     # SVM configuration
     svm_group = parser.add_argument_group("SVM Specific Params")
-    svm_group.add_argument("--mode", type=str, choices=["standard", "sgd"], default="standard",
+    # Learning algorithm for svm
+    svm_group.add_argument("--mode", type=str,
+                           choices=["standard", "sgd"], default="standard",
                            help="SVM calculation mode")
-    svm_group.add_argument("--kernel", type=str, choices=["linear", "poly", "rbf"], default="linear", help="SVM Kernel")
-    svm_group.add_argument("--lr_schedule", type=str, choices=["adaptive", "optimal", "invscaling", "constant"],
+    svm_group.add_argument("--kernel", type=str,
+                           choices=["linear", "poly", "rbf"],
+                           default="linear", help="SVM Kernel")
+
+    svm_group.add_argument("--lr_schedule", type=str,
+                           choices=["adaptive", "optimal", "invscaling", "constant"],
                            default="adaptive", help="LR schedule for SGD mode")
-    svm_group.add_argument("--c_min", type=float, default=1e-3, help="Min bound for C parameter")
-    svm_group.add_argument("--c_max", type=float, default=1e2, help="Max bound for C parameter")
-    svm_group.add_argument("--c_steps", type=int, default=10, help="Steps for GridSearch C")
+    svm_group.add_argument("--c_min", type=float,
+                           default=1e-3, help="Min bound for C parameter")
+    svm_group.add_argument("--c_max", type=float,
+                           default=1e2, help="Max bound for C parameter")
+    svm_group.add_argument("--c_steps", type=int,
+                           default=10, help="Steps for GridSearch C")
 
     # RF config
     rf_group = parser.add_argument_group("Random Forest Specific Params")
@@ -78,6 +113,21 @@ def parse_arguments():
     df_group.add_argument("--df_n_trees_max", type=int, default=200)
     df_group.add_argument("--df_depth_min", type=int, default=5)
     df_group.add_argument("--df_depth_max", type=int, default=30)
+
+    # xgboost
+    opt_group.add_argument("--custom_n_estimators", type=int,
+                           nargs='+', default=None,
+                           help="n_estimators for xgboost")
+
+    # THÊM MỚI: Các tham số truyền mảng cho XGBoost Grid Search
+    opt_group.add_argument("--xgb_grid_n_estimators", type=int, nargs='+',
+                           default=[100, 300, 500, 800])
+    opt_group.add_argument("--xgb_grid_max_depth", type=int, nargs='+',
+                           default=[3, 5, 7])
+    opt_group.add_argument("--xgb_grid_lr", type=float, nargs='+',
+                           default=[0.01, 0.05, 0.1])
+    opt_group.add_argument("--xgb_grid_colsample", type=float, nargs='+',
+                           default=[0.8, 1.0])
 
     args = parser.parse_args()
 

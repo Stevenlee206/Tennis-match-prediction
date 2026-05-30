@@ -37,6 +37,8 @@ def get_output_directories(args):
         model_subpath = "tabnet"
     elif args.model == "deepforest":
         model_subpath = "deepforest"
+    elif args.model == "xgboost":
+        model_subpath = "xgboost"
 
     out_dir = BASE_DIR / "outputs" / model_subpath / args.mode / args.optimizer / args.validation
     rep_dir = BASE_DIR / "reports" / "figures" / model_subpath / args.mode / args.optimizer / args.validation
@@ -73,8 +75,8 @@ def main():
         # Chạy pipeline (truyền tham số tự động nhờ kwargs)
         run_pipeline(X_train, y_train, X_val, y_val, out_dir, rep_dir, **valid_kwargs)
         # Đánh giá trên tập Validation
-        load_and_evaluate_model(args, X_val, y_val, out_dir)
-
+        load_and_evaluate_model(args, X_test, y_test, out_dir)
+        
     elif args.validation == "walk_forward":
         if 'is_augmented' in X_train_val.columns:
             X_train_val = X_train_val.drop(columns=['is_augmented'])

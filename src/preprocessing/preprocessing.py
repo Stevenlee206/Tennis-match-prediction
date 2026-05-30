@@ -79,4 +79,5 @@ class Preprocessing:
 if __name__ == '__main__':
     p = Preprocessing()
     final_data = p.run()
+    final_data.info()
     print(f"Preprocessing complete. Final shape: {final_data.shape}")

@@ -23,23 +23,41 @@ DISPATCH_TABLE = {
     },
     'tabnet': {
         'optuna': ('src.models.tabnet.tabnet_optuna', 'run_tabnet_pipeline')
+    },
+    'xgboost': {
+        'custom': ('src.models.xgboost.xgboost_pipeline', 'run_xgboost_pipeline'),
+        'ga':     ('src.models.xgboost.xgboost_ga_pipeline', 'run_xgboost_ga_pipeline'),
+        'random': ('src.models.xgboost.xgboost_rs_pipeline', 'run_xgboost_random_pipeline'),
+        'optuna': ('src.models.xgboost.xgboost_optuna_pipeline', 'run_xgboost_optuna_pipeline'),
+        'grid':   ('src.models.xgboost.xgboost_grid_pipeline', 'run_xgboost_grid_pipeline'),
+        'pso':    ('src.models.xgboost.xgboost_pso_pipeline', 'run_xgboost_pso_pipeline')
     }
 }
 
 
-# 2. HÀM TRUY XUẤT THÔNG MINH
+# HÀM TRUY XUẤT THÔNG MINH
 def get_model_routing_info(model_name: str, optimizer: str, mode: str):
     """
     Xử lý các ngoại lệ (như SGD) và trả về (module_path, function_name)
     """
-    # Xử lý ngoại lệ cho SVM chạy bằng SGD
+    # SVM use SGD learning algorithm
     if model_name == 'svm' and optimizer == 'optuna' and mode == 'sgd':
         return 'src.models.svm.svm_sklearn_SGD', 'run_svm_pipeline'
 
-    # Xử lý quy luật chung: Nếu model không phải svm/rf thì mặc định dùng optuna
-    opt_key = optimizer if model_name in ['svm', 'rf'] else 'optuna'
+    # Check if model exist
+    if model_name not in DISPATCH_TABLE:
+        raise ValueError(f"Mô hình '{model_name}' chưa được đăng ký trong hệ thống.")
 
-    try:
-        return DISPATCH_TABLE[model_name][opt_key]
-    except KeyError:
-        raise ValueError(f"Chưa hỗ trợ pipeline cho mô hình '{model_name}' với '{optimizer}'.")
+    routes = DISPATCH_TABLE[model_name]
+
+    # Take optimizer pass by user
+    if optimizer in routes:
+        return routes[optimizer]
+
+    # Nếu optimizer không khớp, TỰ ĐỘNG lấy cấu hình đầu tiên của model đó làm fallback
+    # Điều này loại bỏ hoàn toàn việc "hardcode" key 'optuna'
+    fallback_key = list(routes.keys())[0]
+    print(
+        f"[*] Cảnh báo: Tự động dùng fallback '{fallback_key}' do '{optimizer}' không có trong cấu hình của {model_name}.")
+
+    return routes[fallback_key]
