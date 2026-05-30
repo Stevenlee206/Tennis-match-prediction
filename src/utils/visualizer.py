@@ -34,3 +34,13 @@ def plot_hyperparameter_heatmap(results, lr_list, wd_list):
     plt.ylabel('Learning Rate')
     plt.title('Hyperparameter Grid Search (Validation Accuracy)')
     _show_or_save_plot('hyperparameter_heatmap.png')
+
+def plot_confusion_matrix(cm, filename='confusion_matrix.png'):
+    plt.figure(figsize=(6, 5))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                xticklabels=['Player 2 Win', 'Player 1 Win'],
+                yticklabels=['Player 2 Win', 'Player 1 Win'])
+    plt.ylabel('Actual')
+    plt.xlabel('Predicted')
+    plt.title('Confusion Matrix')
+    _show_or_save_plot(filename)

@@ -79,18 +79,19 @@ def predict(df: pd.DataFrame, model_path: str, scaler_path: str, batch_size: int
 
 
 def evaluate_model(model_path: str, scaler_path: str, test_data_path: str = None, 
-                   output_csv_path: str = None, device: str = 'cpu'):
+                   output_image_path: str = None, device: str = 'cpu'):
     """
     Đánh giá mô hình trên tập test (quarantine test set mặc định hoặc file CSV tùy chỉnh),
-    in ra Accuracy, Confusion Matrix, Classification Report và lưu kết quả.
+    in ra Accuracy, Confusion Matrix, Classification Report và lưu ảnh Confusion Matrix.
     """
-    if output_csv_path is None:
-        output_csv_path = os.path.join(models_dir, 'test_predictions.csv')
+    if output_image_path is None:
+        output_image_path = os.path.join(project_root, 'confusion_matrix.png')
 
     import json
     from utils.dataset import prepare_loaders, TennisDataset
     from torch.utils.data import DataLoader
     from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+    from utils.visualizer import plot_confusion_matrix
 
     print("\n" + "="*50)
     print("      ĐÁNH GIÁ MÔ HÌNH DỰ ĐOÁN TENNIS (INFERENCE)")
@@ -204,28 +205,15 @@ def evaluate_model(model_path: str, scaler_path: str, test_data_path: str = None
         cm = confusion_matrix(y_test, preds)
         print(cm)
         
+        print(f"\nĐang vẽ và lưu ảnh Confusion Matrix tại: {output_image_path}")
+        plot_confusion_matrix(cm, output_image_path)
+        
         print("\nBáo cáo chi tiết (Classification Report):")
         report = classification_report(y_test, preds, target_names=["Player 2 Win", "Player 1 Win"])
         print(report)
         print("=" * 58)
     else:
-        print(f"\nĐã hoàn thành dự đoán trên {len(preds)} mẫu.")
-
-    # 6. Save Predictions
-    output_df = pd.DataFrame({
-        'Prob_Player1_Win': probs,
-        'Pred_Winner_Label': preds,
-        'Pred_Winner': np.where(preds == 1, 'Player 1', 'Player 2')
-    })
-    
-    if y_test is not None:
-        output_df['True_Winner_Label'] = y_test
-        output_df['True_Winner'] = np.where(y_test == 1, 'Player 1', 'Player 2')
-        output_df['Correct'] = output_df['Pred_Winner'] == output_df['True_Winner']
-
-    os.makedirs(os.path.dirname(output_csv_path), exist_ok=True)
-    output_df.to_csv(output_csv_path, index=False, encoding='utf-8')
-    print(f"\n[Kết quả] Đã lưu kết quả dự đoán chi tiết tại: {output_csv_path}")
+        print(f"\nĐã hoàn thành dự đoán trên {len(preds)} mẫu. Không có ground truth target để vẽ Confusion Matrix.")
 
 
 if __name__ == '__main__':
@@ -234,6 +222,6 @@ if __name__ == '__main__':
         model_path=os.path.join(models_dir, 'final_model_best.pth'),
         scaler_path=os.path.join(models_dir, 'scaler.joblib'),
         test_data_path=None,
-        output_csv_path=os.path.join(models_dir, 'test_predictions.csv'),
+        output_image_path=os.path.join(project_root, 'confusion_matrix.png'),
         device=device
     )

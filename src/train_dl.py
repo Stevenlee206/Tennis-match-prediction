@@ -18,7 +18,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 models_dir = os.path.join(project_root, 'models')
 
 
-def train(model_path=None, epochs=50, skip_cv=False):
+def train(model_path=None, epochs=5, skip_cv=False):
     device = torch.device("cpu")
     if torch.cuda.is_available():
         device = torch.device("cuda")
@@ -95,8 +95,8 @@ def train(model_path=None, epochs=50, skip_cv=False):
 
     if not skip_cv:
         # Tự động tìm kiếm trên lưới 10x10
-        learning_rates = np.logspace(-4, -2, 10).tolist()
-        weight_decays = np.logspace(-6, -3, 10).tolist()
+        learning_rates = np.logspace(-4, -2, 2).tolist()
+        weight_decays = np.logspace(-6, -3, 2).tolist()
 
         best_acc = 0
         best_history = None
@@ -214,19 +214,13 @@ def train(model_path=None, epochs=50, skip_cv=False):
     torch.save(final_model.state_dict(), os.path.join(models_dir, 'final_model_last.pth'))
     print(f"Đã lưu trọng số mô hình cuối cùng (last, best) tại thư mục {models_dir}")
             
-    # 3. Đánh giá trên quarantine test set
-    test_acc = evaluate_test(final_model, test_loader, device)
-
-    # 4. Lưu báo cáo kết quả report.md
+    # 3. Lưu báo cáo kết quả report.md
     report_content = f"""# Báo Cáo Kết Quả Huấn Luyện (Tennis Match Prediction)
 
 ## Siêu tham số tối ưu tìm được qua Grid Search
 - **Learning Rate (LR):** {best_lr:.2e}
 - **Weight Decay (WD):** {best_wd:.2e}
 - **Độ chính xác Cross-Validation tốt nhất (Best CV Accuracy):** {best_acc:.4f}
-
-## Đánh giá trên tập dữ liệu Test Quarantine
-- **Độ chính xác trên tập Test (Final Test Accuracy):** {test_acc:.4f}
 
 ## Biểu đồ trực quan hóa
 
@@ -241,18 +235,6 @@ def train(model_path=None, epochs=50, skip_cv=False):
         f.write(report_content)
     print(f"Đã lưu báo cáo kết quả tại: {report_path}")
 
-
-def evaluate_test(model, test_loader, device):
-    model.eval()
-    correct = 0
-    with torch.no_grad():
-        for X_test, y_test in test_loader:
-            X_test, y_test = X_test.to(device), y_test.to(device)
-            preds = model(X_test).argmax(dim=1)
-            correct += (preds == y_test).sum().item()
-    test_acc = correct / len(test_loader.dataset)
-    print(f"Final Test Accuracy: {test_acc:.4f}")
-    return test_acc
 
 
 if __name__ == "__main__":
