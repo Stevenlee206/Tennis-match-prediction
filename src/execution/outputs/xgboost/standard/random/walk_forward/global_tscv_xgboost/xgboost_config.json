@@ -1,0 +1,19 @@
+{
+    "model_type": "XGBoost_RandomSearch",
+    "best_params": {
+        "colsample_bytree": 0.7852444528883149,
+        "gamma": 1.2233063209765618,
+        "learning_rate": 0.011342597991746308,
+        "max_depth": 3,
+        "n_estimators": 660,
+        "subsample": 0.7574323980775167
+    },
+    "bias_metrics": {
+        "class_1_prediction_rate": 50.14,
+        "elo_reliance": 89.37,
+        "elo_baseline_accuracy": 64.09,
+        "upset_prediction_accuracy": 16.62,
+        "rank_reliance": 86.39,
+        "final_accuracy": 65.4
+    }
+}

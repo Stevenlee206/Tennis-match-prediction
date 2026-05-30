@@ -1,0 +1,19 @@
+{
+    "model_type": "XGBoost_PSO",
+    "best_params": {
+        "n_estimators": 580,
+        "max_depth": 6,
+        "learning_rate": 0.01,
+        "subsample": 0.6677071949402604,
+        "colsample_bytree": 0.6,
+        "gamma": 1.2993336369362423
+    },
+    "bias_metrics": {
+        "class_1_prediction_rate": 50.27,
+        "elo_reliance": 87.93,
+        "elo_baseline_accuracy": 64.09,
+        "upset_prediction_accuracy": 19.39,
+        "rank_reliance": 84.95,
+        "final_accuracy": 65.95
+    }
+}

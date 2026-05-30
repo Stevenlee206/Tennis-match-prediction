@@ -1,0 +1,19 @@
+{
+    "model_type": "XGBoost_GA",
+    "best_params": {
+        "n_estimators": 239,
+        "max_depth": 6,
+        "learning_rate": 0.02137351074625296,
+        "subsample": 0.6267048374201688,
+        "colsample_bytree": 0.6815215549453445,
+        "gamma": 1.5358751032360223
+    },
+    "bias_metrics": {
+        "class_1_prediction_rate": 50.41,
+        "elo_reliance": 87.65,
+        "elo_baseline_accuracy": 64.09,
+        "upset_prediction_accuracy": 20.44,
+        "rank_reliance": 85.01,
+        "final_accuracy": 66.43
+    }
+}
