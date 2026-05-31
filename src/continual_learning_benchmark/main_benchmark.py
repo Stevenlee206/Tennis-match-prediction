@@ -36,7 +36,7 @@ def main():
     parser.add_argument("--run_all", action="store_true", help="Run all modes")
     parser.add_argument("--model", type=str, choices=["nn", "pcn", "both"], default="nn", help="Model to evaluate")
     parser.add_argument("--pcn_dir", type=str, default="", help="Directory containing PCN config and weights")
-    parser.add_argument("--nn_weights", type=str, default="", help="Optional NN pre-trained weights")
+    parser.add_argument("--nn_weights", type=str, default="models/final_model_last.pth", help="Optional NN pre-trained weights")
     parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs")
     
     args = parser.parse_args()
