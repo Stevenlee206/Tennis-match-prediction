@@ -12,12 +12,11 @@ if project_root not in sys.path:
 from src.continual_learning_benchmark.data_splitter import BenchmarkDataPipeline
 from src.continual_learning_benchmark.player_categorizer import categorize_players
 from src.continual_learning_benchmark.evaluator import evaluate_model_bias, evaluate_player_metrics
-from src.continual_learning_benchmark.models_setup import get_nn_model, get_pcn_model, train_nn_full
+from src.continual_learning_benchmark.models_setup import get_nn_model, get_pcn_model, train_model_full
 from src.continual_learning_benchmark.utils import TeeLogger, plot_benchmark_results
 import datetime
 import json
 import torch
-import numpy as np
 
 class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -29,43 +28,24 @@ class NumpyEncoder(json.JSONEncoder):
             return obj.tolist()
         return super(NumpyEncoder, self).default(obj)
 
-def train_pcn_full(wrapper, X: np.ndarray, y: np.ndarray, epochs=5, batch_size=64):
-    """
-    Helper to train PCN from scratch over a full dataset.
-    """
-    print(f"Training PCN from scratch for {epochs} epochs on {len(X)} samples...")
-    for epoch in range(epochs):
-        indices = np.random.permutation(len(X))
-        X_shuf = X[indices]
-        y_shuf = y[indices]
-        
-        energies = []
-        for i in range(0, len(X), batch_size):
-            X_b = X_shuf[i:i+batch_size]
-            y_b = y_shuf[i:i+batch_size]
-            energy = wrapper.model.train_on_batch(X_b, y_b)
-            energies.append(energy)
-            
-        print(f" Epoch {epoch+1}/{epochs} - Energy: {np.mean(energies):.4f}")
-    return wrapper
-
 def main():
     parser = argparse.ArgumentParser(description="Continual Learning Benchmark")
     parser.add_argument("--run_static", action="store_true", help="Run Static mode")
     parser.add_argument("--run_retrain", action="store_true", help="Run Retrain mode")
-    parser.add_argument("--run_online", action="store_true", help="Run Online mode")
+    parser.add_argument("--run_finetune", action="store_true", help="Run Fine-tune mode")
     parser.add_argument("--run_all", action="store_true", help="Run all modes")
     parser.add_argument("--model", type=str, choices=["nn", "pcn", "both"], default="nn", help="Model to evaluate")
     parser.add_argument("--pcn_dir", type=str, default="", help="Directory containing PCN config and weights")
     parser.add_argument("--nn_weights", type=str, default="", help="Optional NN pre-trained weights")
+    parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs")
     
     args = parser.parse_args()
     
     if args.run_all:
-        args.run_static = args.run_retrain = args.run_online = True
+        args.run_static = args.run_retrain = args.run_finetune = True
         
-    if not (args.run_static or args.run_retrain or args.run_online):
-        print("No mode selected. Provide at least one of: --run_static, --run_retrain, --run_online, or --run_all")
+    if not (args.run_static or args.run_retrain or args.run_finetune):
+        print("No mode selected. Provide at least one of: --run_static, --run_retrain, --run_finetune, or --run_all")
         return
 
     # Setup Logging & Output Directory
@@ -87,14 +67,14 @@ def main():
 
     print("--- 1. Loading & Processing Data ---")
     pipeline = BenchmarkDataPipeline()
-    data, train_split_idx, pre_2024_count = pipeline.run()
+    data, train_split_idx, pre_2025_count = pipeline.run()
     
     print("--- 2. Identifying Target Players ---")
     selected_players, _ = categorize_players(data, num_players_per_category=3)
     
     print("--- 3. Splitting Benchmark Data ---")
     from src.continual_learning_benchmark.data_splitter import get_benchmark_splits
-    D_Base, D_Stream, D_Test, D_Holdout = get_benchmark_splits(data, train_split_idx, pre_2024_count, selected_players)
+    D_Train_Base, D_Mean, D_Test, D_Holdout = get_benchmark_splits(data, train_split_idx, pre_2025_count)
     
     # Separate features and metadata
     def prep_xy(df):
@@ -107,8 +87,8 @@ def main():
         y = df_clean['target'].values if 'target' in df_clean.columns else np.zeros(len(df_clean))
         return X, y, raw
         
-    X_base, y_base, raw_base = prep_xy(D_Base)
-    X_stream, y_stream, raw_stream = prep_xy(D_Stream)
+    X_base, y_base, raw_base = prep_xy(D_Train_Base)
+    X_mean, y_mean, raw_mean = prep_xy(D_Mean)
     X_test, y_test, raw_test = prep_xy(D_Test)
     
     input_dim = X_base.shape[1]
@@ -123,12 +103,12 @@ def main():
     from sklearn.preprocessing import StandardScaler
     scaler = StandardScaler()
     X_base = scaler.fit_transform(X_base)
-    X_stream = scaler.transform(X_stream)
+    X_mean = scaler.transform(X_mean)
     X_test = scaler.transform(X_test)
 
     # Prepare merged sets for Retrain
-    X_base_stream = np.vstack([X_base, X_stream])
-    y_base_stream = np.concatenate([y_base, y_stream])
+    X_base_mean = np.vstack([X_base, X_mean])
+    y_base_mean = np.concatenate([y_base, y_mean])
     
     for model_type in models_to_run:
         all_results[model_type] = {}
@@ -137,12 +117,11 @@ def main():
         if args.run_static:
             print("\n[MODE: STATIC]")
             if model_type == "nn":
-                model = get_nn_model(input_dim, mode="static", external_weights_path=args.nn_weights)
+                model = get_nn_model(input_dim, mode="static", weights_path=args.nn_weights)
                 if not args.nn_weights:
-                    model = train_nn_full(model, X_base, y_base, epochs=3)
-                
+                    model = train_model_full(model, X_base, y_base, epochs=args.epochs)
             elif model_type == "pcn":
-                model = get_pcn_model(input_dim, mode="static", model_path=pc_model_path, config_path=pc_config_path)
+                model = get_pcn_model(input_dim, mode="static", weights_path=pc_model_path, config_path=pc_config_path)
             
             y_pred = (model.predict_proba(X_test) >= 0.5).astype(int)
             bias_m = evaluate_model_bias(y_test, y_pred, raw_test, dataset_name=f"Static {model_type.upper()}")
@@ -156,11 +135,11 @@ def main():
         if args.run_retrain:
             print("\n[MODE: RETRAIN]")
             if model_type == "nn":
-                model = get_nn_model(input_dim, mode="retrain", external_weights_path=None) # Always from scratch
-                model = train_nn_full(model, X_base_stream, y_base_stream, epochs=3)
+                model = get_nn_model(input_dim, mode="retrain", weights_path=None) # Always from scratch
             elif model_type == "pcn":
-                model = get_pcn_model(input_dim, mode="retrain", model_path="", config_path=pc_config_path)
-                model = train_pcn_full(model, X_base_stream, y_base_stream, epochs=3)
+                model = get_pcn_model(input_dim, mode="retrain", weights_path="", config_path=pc_config_path)
+            
+            model = train_model_full(model, X_base_mean, y_base_mean, epochs=args.epochs)
                 
             y_pred = (model.predict_proba(X_test) >= 0.5).astype(int)
             bias_m = evaluate_model_bias(y_test, y_pred, raw_test, dataset_name=f"Retrain {model_type.upper()}")
@@ -173,43 +152,36 @@ def main():
             
             # Save weights
             if model_type == "nn":
-                torch.save(model.model.state_dict(), os.path.join(weights_dir, f"{model_type}_retrain_weights.pt"))
+                torch.save(model.get_state_dict(), os.path.join(weights_dir, f"{model_type}_retrain_weights.pt"))
             elif model_type == "pcn":
-                np.savez(os.path.join(weights_dir, f"{model_type}_retrain_weights.npz"), **model.model.get_state_dict())
+                np.savez(os.path.join(weights_dir, f"{model_type}_retrain_weights.npz"), **model.get_state_dict())
             
-        if args.run_online:
-            print("\n[MODE: ONLINE]")
-            # Initialize with base model
+        if args.run_finetune:
+            print("\n[MODE: FINE-TUNE]")
             if model_type == "nn":
-                model = get_nn_model(input_dim, mode="online", external_weights_path=args.nn_weights)
+                model = get_nn_model(input_dim, mode="finetune", weights_path=args.nn_weights)
                 if not args.nn_weights:
-                    model = train_nn_full(model, X_base, y_base, epochs=3)
+                    model = train_model_full(model, X_base, y_base, epochs=args.epochs)
             elif model_type == "pcn":
-                model = get_pcn_model(input_dim, mode="online", model_path=pc_model_path, config_path=pc_config_path)
+                model = get_pcn_model(input_dim, mode="finetune", weights_path=pc_model_path, config_path=pc_config_path)
                 
-            # Online Learning on D_Stream
-            print(f"Streaming {len(X_stream)} samples for continuous updates...")
-            for i in range(len(X_stream)):
-                # Update sequentially
-                model.online_train_step(X_stream[i:i+1], y_stream[i:i+1])
-                if i % 1000 == 0 and i > 0:
-                    print(f" Processed {i}/{len(X_stream)} stream samples...")
+            print(f"Fine-tuning on {len(X_mean)} new samples...")
+            model = train_model_full(model, X_mean, y_mean, epochs=args.epochs)
                     
-            # Predict on D_Test
             y_pred = (model.predict_proba(X_test) >= 0.5).astype(int)
-            bias_m = evaluate_model_bias(y_test, y_pred, raw_test, dataset_name=f"Online {model_type.upper()}")
+            bias_m = evaluate_model_bias(y_test, y_pred, raw_test, dataset_name=f"Finetune {model_type.upper()}")
             player_m = evaluate_player_metrics(y_test, y_pred, raw_test, selected_players)
             
-            all_results[model_type]["online"] = {
+            all_results[model_type]["finetune"] = {
                 "bias_metrics": bias_m,
                 "player_metrics": player_m
             }
             
             # Save weights
             if model_type == "nn":
-                torch.save(model.model.state_dict(), os.path.join(weights_dir, f"{model_type}_online_weights.pt"))
+                torch.save(model.get_state_dict(), os.path.join(weights_dir, f"{model_type}_finetune_weights.pt"))
             elif model_type == "pcn":
-                np.savez(os.path.join(weights_dir, f"{model_type}_online_weights.npz"), **model.model.get_state_dict())
+                np.savez(os.path.join(weights_dir, f"{model_type}_finetune_weights.npz"), **model.get_state_dict())
 
     # Finalize: Save Metrics & Visualize
     metrics_file = os.path.join(run_dir, "metrics.json")

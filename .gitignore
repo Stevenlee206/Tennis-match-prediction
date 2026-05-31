@@ -239,4 +239,5 @@ __marimo__/
 *.db
 *.pth
 *.pt
+*.npz
 .vscode/

@@ -1,44 +1,18 @@
 import os
 import sys
+import json
 import numpy as np
 import torch
 import torch.nn as nn
-from sklearn.neural_network import MLPClassifier
 
 # Ensure project root is in path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from src.models.pcn_wrapper import PCNWrapper
+from src.models.predictive_coding.pc_network_torch import PredictiveCodingNetworkTorch
+from src.models.predictive_coding.pc_network import PCNetworkConfig
 
-# ---------------------------------------------------------
-# PCN Wrappers
-# ---------------------------------------------------------
-class StaticPCNWrapper(PCNWrapper):
-    """
-    PCN in Static mode. Does NOT update weights during testing.
-    """
-    def online_train_step(self, X: np.ndarray, y: np.ndarray) -> dict:
-        probs = self.predict_proba(X)
-        preds = (probs >= 0.5).astype(int)
-        acc = (preds == y).mean()
-        return {"loss": 0.0, "accuracy": acc}
-
-class OnlinePCNWrapper(PCNWrapper):
-    """
-    PCN in Online mode. Updates weights sequentially.
-    """
-    def __init__(self, model_path: str, config_path: str, input_dim: int):
-        super().__init__(model_path, config_path, input_dim)
-        # Reduce learning rate during streaming to mitigate catastrophic forgetting.
-        # Since PCN uses SGD, a large LR overwrites base knowledge quickly on noisy stream data.
-        # By lowering it, PCN slowly adapts without forgetting, outperforming standard NN.
-        self.model.cfg.learning_rate = self.model.cfg.learning_rate * 0.05
-
-# ---------------------------------------------------------
-# NN Wrappers
-# ---------------------------------------------------------
 class SimpleMLP(nn.Module):
     def __init__(self, input_dim):
         super(SimpleMLP, self).__init__()
@@ -52,9 +26,9 @@ class SimpleMLP(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-class FlexibleNNWrapper:
+class NNWrapper:
     """
-    Base wrapper for a PyTorch Neural Network.
+    Minimal wrapper for PyTorch NN to unify interface with PCN (predict_proba, train_on_batch).
     """
     def __init__(self, model: nn.Module, lr=0.001):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -70,7 +44,7 @@ class FlexibleNNWrapper:
             probs = torch.sigmoid(logits).cpu().numpy().flatten()
         return probs
         
-    def online_train_step(self, X: np.ndarray, y: np.ndarray) -> dict:
+    def train_on_batch(self, X: np.ndarray, y: np.ndarray) -> float:
         self.model.train()
         self.optimizer.zero_grad()
         X_tensor = torch.FloatTensor(X).to(self.device)
@@ -81,66 +55,77 @@ class FlexibleNNWrapper:
         loss.backward()
         self.optimizer.step()
         
-        probs = torch.sigmoid(logits).detach().cpu().numpy().flatten()
-        preds = (probs >= 0.5).astype(int)
-        acc = (preds == y.flatten()).mean()
+        return loss.item()
+    
+    def get_state_dict(self):
+        return self.model.state_dict()
         
-        return {"loss": loss.item(), "accuracy": acc}
+    def load_state_dict(self, state_dict):
+        self.model.load_state_dict(state_dict)
 
-class StaticNNWrapper(FlexibleNNWrapper):
+def get_nn_model(input_dim, mode, weights_path=None):
     """
-    NN in Static mode. Does NOT update weights.
-    """
-    def online_train_step(self, X: np.ndarray, y: np.ndarray) -> dict:
-        probs = self.predict_proba(X)
-        preds = (probs >= 0.5).astype(int)
-        acc = (preds == y).mean()
-        return {"loss": 0.0, "accuracy": acc}
-
-class OnlineNNWrapper(FlexibleNNWrapper):
-    """
-    NN in Online mode. Updates weights sequentially.
-    """
-    pass
-
-# ---------------------------------------------------------
-# Factory function for NN
-# ---------------------------------------------------------
-def get_nn_model(input_dim, mode, external_weights_path=None):
-    """
-    Initializes the NN based on mode (static or online).
-    Supports loading external weights (Option 2).
+    Initializes the NN. Loads weights if mode is static or finetune.
     """
     model = SimpleMLP(input_dim)
+    wrapper = NNWrapper(model=model, lr=0.001)
     
-    if external_weights_path and os.path.exists(external_weights_path):
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        model.load_state_dict(torch.load(external_weights_path, map_location=device))
-        print(f"Loaded external NN weights from {external_weights_path}")
+    if mode in ['static', 'finetune'] and weights_path and os.path.exists(weights_path):
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        wrapper.load_state_dict(torch.load(weights_path, map_location=device, weights_only=True))
+        print(f"Loaded external NN weights from {weights_path}")
         
-    if mode.lower() == 'static' or mode.lower() == 'retrain':
-        # For Retrain, the model will be trained in the benchmark script before testing
-        return StaticNNWrapper(model=model, lr=0.001)
-    else:
-        return OnlineNNWrapper(model=model, lr=0.001)
+    return wrapper
 
-def get_pcn_model(input_dim, mode, model_path, config_path):
+def get_pcn_model(input_dim, mode, weights_path, config_path):
     """
-    Initializes the PCN based on mode.
+    Initializes the PCN model directly. Loads weights if mode is static or finetune.
+    During finetuning, learning rate is halved for stability.
     """
-    if mode.lower() == 'static' or mode.lower() == 'retrain':
-        return StaticPCNWrapper(model_path=model_path, config_path=config_path, input_dim=input_dim)
-    else:
-        return OnlinePCNWrapper(model_path=model_path, config_path=config_path, input_dim=input_dim)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    layer_sizes = [input_dim, 64, 32, 1] # Default fallback
+    cfg = PCNetworkConfig()
+    
+    if config_path and os.path.exists(config_path):
+        try:
+            with open(config_path, 'r') as f:
+                config_dict = json.load(f)
+            if 'model_params' in config_dict and 'hidden_sizes' in config_dict['model_params']:
+                hidden_sizes = config_dict['model_params']['hidden_sizes']
+                layer_sizes = [input_dim] + hidden_sizes + [1]
+                
+            best_params = config_dict.get('best_params', {})
+            cfg.learning_rate = best_params.get('learning_rate', 0.001)
+            cfg.inference_lr = best_params.get('inference_lr', 0.05)
+            cfg.inference_steps = best_params.get('inference_steps', 20)
+            cfg.hidden_activation = best_params.get('hidden_activation', 'relu')
+            cfg.output_activation = best_params.get('output_activation', 'sigmoid')
+        except Exception as e:
+            print(f"Failed to load PCN config: {e}. Using defaults.")
+            
+    # Reduce learning rate by half for fine-tuning
+    if mode == 'finetune':
+        cfg.learning_rate *= 0.5
+        print(f"Fine-tune mode: Reduced PCN learning rate to {cfg.learning_rate}")
+            
+    model = PredictiveCodingNetworkTorch(layer_sizes=layer_sizes, cfg=cfg, device=device)
+    
+    if mode in ['static', 'finetune'] and weights_path and os.path.exists(weights_path):
+        try:
+            state = np.load(weights_path, allow_pickle=True)
+            state_dict = {k: state[k] for k in state.files}
+            model.load_state_dict(state_dict)
+            print(f"Loaded PCN weights from {weights_path}")
+        except Exception as e:
+            print(f"Failed to load PCN weights: {e}. Starting from scratch.")
+            
+    return model
 
-# ---------------------------------------------------------
-# Training Helper for NN
-# ---------------------------------------------------------
-def train_nn_full(wrapper: FlexibleNNWrapper, X: np.ndarray, y: np.ndarray, epochs=5, batch_size=64):
+def train_model_full(model, X: np.ndarray, y: np.ndarray, epochs=3, batch_size=64):
     """
-    Trains the NN from scratch over a full dataset (used for building the Static base model or Retraining).
+    Trains the model (NNWrapper or PCN) over the dataset for specified epochs.
     """
-    print(f"Training NN from scratch for {epochs} epochs on {len(X)} samples...")
+    print(f"Training model for {epochs} epochs on {len(X)} samples...")
     for epoch in range(epochs):
         indices = np.random.permutation(len(X))
         X_shuf = X[indices]
@@ -150,9 +135,8 @@ def train_nn_full(wrapper: FlexibleNNWrapper, X: np.ndarray, y: np.ndarray, epoc
         for i in range(0, len(X), batch_size):
             X_b = X_shuf[i:i+batch_size]
             y_b = y_shuf[i:i+batch_size]
-            # Force the base class training step so it actually trains, regardless of static/online wrapper
-            metrics = FlexibleNNWrapper.online_train_step(wrapper, X_b, y_b)
-            losses.append(metrics['loss'])
+            loss = model.train_on_batch(X_b, y_b)
+            losses.append(loss)
             
-        print(f" Epoch {epoch+1}/{epochs} - Loss: {np.mean(losses):.4f}")
-    return wrapper
+        print(f" Epoch {epoch+1}/{epochs} - Loss/Energy: {np.mean(losses):.4f}")
+    return model

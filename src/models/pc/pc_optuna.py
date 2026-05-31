@@ -27,9 +27,9 @@ def generate_sample_weights(X_train, y_train, weight_strategy="none", upset_weig
         weights[upsets] = upset_weight
     return weights
 
-from src.model.Predictive_Coding.pc_network import PCNetworkConfig
-from src.model.Predictive_Coding.pc_network_torch import PredictiveCodingNetworkTorch
-from src.model.util.metrics import binary_classification_metrics
+from src.models.predictive_coding.pc_network import PCNetworkConfig
+from src.models.predictive_coding.pc_network_torch import PredictiveCodingNetworkTorch
+from src.models.utils.metrics import binary_classification_metrics
 
 def plot_optuna_history(study, save_path):
     plt.figure(figsize=(10, 6))
@@ -451,7 +451,7 @@ def run_pc_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
     
     if X_v_scaled is not None:
         plot_feature_importance_permutation(model, X_v_scaled, y_v_np, X_v_clean.columns, reports_dir)
-        from src.model.util.metrics import binary_classification_metrics, evaluate_model_bias
+        from src.models.utils.metrics import binary_classification_metrics, evaluate_model_bias
         val_probs = model.predict_proba(X_v_scaled)
         val_preds = (val_probs >= 0.5).astype(int)
         final_metrics = binary_classification_metrics(y_v_np, val_probs)
