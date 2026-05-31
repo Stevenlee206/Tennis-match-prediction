@@ -17,7 +17,10 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import accuracy_score
-
+import warnings
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.feature_selection import SelectKBest, f_classif
+from sklearn.cluster import KMeans
 # ==========================================
 # PyTorch Model & Custom Loss
 # ==========================================
@@ -133,7 +136,44 @@ def plot_learning_curves(history, save_path):
     plt.tight_layout()
     plt.savefig(save_path / "pytorch_learning_curves.png", dpi=300)
     plt.close()
-
+def apply_poly_kmeans(X_t, y_t, X_v=None, k_clusters=37, top_k=150):
+    """Safely applies Poly Expansion -> Top-K Selection -> Scaler -> KMeans -> Dist Scaler"""
+    # 1. Interaction-Only Polynomial Expansion
+    poly = PolynomialFeatures(degree=2, interaction_only=True, include_bias=False)
+    X_t_poly = poly.fit_transform(X_t)
+    X_v_poly = poly.transform(X_v) if X_v is not None else None
+    
+    # 2. Feature Selection (Suppressing the expected divide-by-zero warnings from constant columns)
+    selector = SelectKBest(score_func=f_classif, k=top_k)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        X_t_sel = selector.fit_transform(X_t_poly, y_t)
+    X_v_sel = selector.transform(X_v_poly) if X_v is not None else None
+    
+    # 3. Scale the selected poly features
+    scaler_poly = StandardScaler()
+    X_t_scaled = scaler_poly.fit_transform(X_t_sel)
+    X_v_scaled = scaler_poly.transform(X_v_sel) if X_v is not None else None
+    
+    # 4. K-Means Clustering on the filtered interactions
+    kmeans = KMeans(n_clusters=k_clusters, random_state=42, n_init=10)
+    t_dists = kmeans.fit_transform(X_t_scaled)
+    
+    # 5. Scale K-Means distances independently
+    dist_scaler = StandardScaler()
+    t_dists_scaled = dist_scaler.fit_transform(t_dists)
+    
+    # 6. Horizontally stack the base features with the distance features
+    X_t_final = np.hstack((X_t_scaled, t_dists_scaled))
+    
+    if X_v is not None:
+        v_dists = kmeans.transform(X_v_scaled)
+        v_dists_scaled = dist_scaler.transform(v_dists)
+        X_v_final = np.hstack((X_v_scaled, v_dists_scaled))
+    else:
+        X_v_final = None
+        
+    return X_t_final, X_v_final, poly, selector, scaler_poly, kmeans, dist_scaler
 # ==========================================
 # Core Training Function
 # ==========================================
@@ -240,7 +280,7 @@ def train_and_evaluate(X_train, y_train, X_val, y_val, params, epochs=50, batch_
 # ==========================================
 # Optimization Objective
 # ==========================================
-def objective(trial, X_train_raw, y_train_raw, X_val_raw, y_val_raw, c_min, c_max, add_pca, validation, weight_strategy, upset_weight, torch_opt, torch_sched, epochs, batch_size, device, n_splits=5, tscv_test_size=None):
+def objective(trial, X_train_raw, y_train_raw, X_val_raw, y_val_raw, c_min, c_max, add_pca, poly_features_kmeans, validation, weight_strategy, upset_weight, torch_opt, torch_sched, epochs, batch_size, device, n_splits=5, tscv_test_size=None):
     trial_seed = 42 + trial.number
     set_seed(trial_seed)
     
@@ -254,16 +294,20 @@ def objective(trial, X_train_raw, y_train_raw, X_val_raw, y_val_raw, c_min, c_ma
     }
 
     if validation == "holdout":
-        scaler = StandardScaler()
-        X_t_scaled = scaler.fit_transform(X_train_raw)
-        X_v_scaled = scaler.transform(X_val_raw)
-        
-        if add_pca:
-            pca = PCA(n_components=0.95, random_state=42)
-            X_t_processed = pca.fit_transform(X_t_scaled)
-            X_v_processed = pca.transform(X_v_scaled)
+        # ---> NEW ROUTING LOGIC <---
+        if poly_features_kmeans:
+            X_t_processed, X_v_processed, _, _, _, _, _ = apply_poly_kmeans(X_train_raw, y_train_raw, X_val_raw, k_clusters=37, top_k=150)
         else:
-            X_t_processed, X_v_processed = X_t_scaled, X_v_scaled
+            scaler = StandardScaler()
+            X_t_scaled = scaler.fit_transform(X_train_raw)
+            X_v_scaled = scaler.transform(X_val_raw)
+            
+            if add_pca:
+                pca = PCA(n_components=0.95, random_state=42)
+                X_t_processed = pca.fit_transform(X_t_scaled)
+                X_v_processed = pca.transform(X_v_scaled)
+            else:
+                X_t_processed, X_v_processed = X_t_scaled, X_v_scaled
 
         params["train_weights"] = generate_sample_weights(X_train_raw, y_train_raw, weight_strategy, upset_weight)
         
@@ -283,6 +327,7 @@ def objective(trial, X_train_raw, y_train_raw, X_val_raw, y_val_raw, c_min, c_ma
             y_v_cv = y_train_raw.iloc[val_index].copy()
             
             # ---> FILTERING LOGIC FOR AUGMENTED DATA <---
+            # ---> FILTERING LOGIC FOR AUGMENTED DATA <---
             if 'is_augmented' in X_v_cv.columns:
                 val_mask = (X_v_cv['is_augmented'] == 0)
                 X_v_cv = X_v_cv[val_mask]
@@ -291,16 +336,20 @@ def objective(trial, X_train_raw, y_train_raw, X_val_raw, y_val_raw, c_min, c_ma
                 X_t_cv = X_t_cv.drop(columns=['is_augmented'])
                 X_v_cv = X_v_cv.drop(columns=['is_augmented'])
             
-            scaler = StandardScaler()
-            X_t_scaled = scaler.fit_transform(X_t_cv)
-            X_v_scaled = scaler.transform(X_v_cv)
-            
-            if add_pca:
-                pca = PCA(n_components=0.95, random_state=42)
-                X_t_processed = pca.fit_transform(X_t_scaled)
-                X_v_processed = pca.transform(X_v_scaled)
+            # ---> FIX: ADDED MISSING ROUTING LOGIC HERE <---
+            if poly_features_kmeans:
+                X_t_processed, X_v_processed, _, _, _, _, _ = apply_poly_kmeans(X_t_cv, y_t_cv, X_v_cv, k_clusters=37, top_k=150)
             else:
-                X_t_processed, X_v_processed = X_t_scaled, X_v_scaled
+                scaler = StandardScaler()
+                X_t_scaled = scaler.fit_transform(X_t_cv)
+                X_v_scaled = scaler.transform(X_v_cv)
+                
+                if add_pca:
+                    pca = PCA(n_components=0.95, random_state=42)
+                    X_t_processed = pca.fit_transform(X_t_scaled)
+                    X_v_processed = pca.transform(X_v_scaled)
+                else:
+                    X_t_processed, X_v_processed = X_t_scaled, X_v_scaled
 
             params["train_weights"] = generate_sample_weights(X_t_cv, y_t_cv, weight_strategy, upset_weight)
             
@@ -317,7 +366,7 @@ def objective(trial, X_train_raw, y_train_raw, X_val_raw, y_val_raw, c_min, c_ma
 # ==========================================
 # Main Execution Pipeline
 # ==========================================
-def run_pytorch_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_trials=30, epochs=100, batch_size=64, c_min=1e-3, c_max=1e2, add_pca=False, validation="holdout", weight_strategy="none", upset_weight=1.0, torch_opt="adam", torch_sched="cosine", n_splits=5, tscv_test_size=None):
+def run_pytorch_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_trials=30, epochs=100, batch_size=64, c_min=1e-3, c_max=1e2, add_pca=False, poly_features_kmeans=False, validation="holdout", weight_strategy="none", upset_weight=1.0, torch_opt="adam", torch_sched="cosine", n_splits=5, tscv_test_size=None):
     set_seed(42)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Executing PyTorch Pipeline on: {device.upper()}")
@@ -346,7 +395,7 @@ def run_pytorch_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir
     )
     
     study.optimize(
-        lambda trial: objective(trial, X_train, y_train, X_val, y_val, c_min, c_max, add_pca, validation, weight_strategy, upset_weight, torch_opt, torch_sched, epochs, batch_size, device, n_splits, tscv_test_size), 
+        lambda trial: objective(trial, X_train, y_train, X_val, y_val, c_min, c_max, add_pca, poly_features_kmeans, validation, weight_strategy, upset_weight, torch_opt, torch_sched, epochs, batch_size, device, n_splits, tscv_test_size), 
         n_trials=n_trials
     )
     best_params = study.best_params
@@ -365,33 +414,55 @@ def run_pytorch_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir
     print("Training final PyTorch model and generating learning curves...")
     
     # Protect scaler from the augmented metadata flag
+    # --- Final Training on Best Params ---
     if 'is_augmented' in X_train.columns:
         X_train_features = X_train.drop(columns=['is_augmented'])
     else:
         X_train_features = X_train
 
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train_features)
-    
-    # Prepare Validation Set for Final Training (to generate the Val Curve)
-    if validation == "holdout" and X_val is not None:
-        X_val_scaled = scaler.transform(X_val)
-    else:
-        X_val_scaled = None
-    
-    if add_pca:
-        pca = PCA(n_components=0.95, random_state=42)
-        X_train_processed = pca.fit_transform(X_train_scaled)
-        joblib.dump(pca, output_dir / "svm_pytorch_pca.joblib")
-        if X_val_scaled is not None:
-            X_val_processed = pca.transform(X_val_scaled)
-        else:
-            X_val_processed = None
-    else:
-        X_train_processed = X_train_scaled
-        X_val_processed = X_val_scaled
+    # Prepare Validation Set for Final Training
+    X_val_features = X_val if (validation == "holdout" and X_val is not None) else None
 
-    if X_val_scaled is None:
+    # ---> NEW: FINAL DATA PREP & ARTIFACT EXPORT <---
+    if poly_features_kmeans:
+        print("Applying Poly-Interaction + K-Means Transformation...")
+        X_train_processed, X_val_processed, poly, selector, scaler_poly, kmeans, dist_scaler = apply_poly_kmeans(
+            X_train_features, y_train, X_val_features, k_clusters=37, top_k=150
+        )
+        
+        # Save all the transformers
+        joblib.dump(poly, output_dir / "svm_pytorch_poly.joblib")
+        joblib.dump(selector, output_dir / "svm_pytorch_selector.joblib")
+        joblib.dump(scaler_poly, output_dir / "svm_pytorch_scaler_poly.joblib")
+        joblib.dump(kmeans, output_dir / "svm_pytorch_kmeans.joblib")
+        joblib.dump(dist_scaler, output_dir / "svm_pytorch_dist_scaler.joblib")
+        
+        # Save a dummy base scaler so main.py file existence checks do not crash
+        scaler = StandardScaler().fit(X_train_features)
+        
+        # Generate feature names accurately for the plot
+        poly_feature_names = poly.get_feature_names_out(input_features=X_train_features.columns)
+        selected_feature_names = poly_feature_names[selector.get_support(indices=True)]
+        cluster_names = [f"Cluster_{i}_Dist" for i in range(37)]
+        final_feature_names = list(selected_feature_names) + cluster_names
+
+    else:
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train_features)
+        X_val_scaled = scaler.transform(X_val_features) if X_val_features is not None else None
+        
+        if add_pca:
+            pca = PCA(n_components=0.95, random_state=42)
+            X_train_processed = pca.fit_transform(X_train_scaled)
+            joblib.dump(pca, output_dir / "svm_pytorch_pca.joblib")
+            X_val_processed = pca.transform(X_val_scaled) if X_val_scaled is not None else None
+            final_feature_names = [f"PC{i+1}" for i in range(X_train_processed.shape[1])]
+        else:
+            X_train_processed = X_train_scaled
+            X_val_processed = X_val_scaled
+            final_feature_names = list(X_train_features.columns)
+
+    if X_val_processed is None:
         eval_y = None
     else:
         eval_y = y_val
@@ -421,17 +492,12 @@ def run_pytorch_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir
     print("-" * 30 + "\n")
 
     # Generate Plots
+    # Generate Plots
     print("Generating plots...")
     plot_optuna_history(study, reports_dir)
     plot_learning_curves(history, reports_dir)
     
-    if add_pca:
-        n_pcs = X_train_processed.shape[1]
-        final_feature_names = [f"PC{i+1}" for i in range(n_pcs)]
-    else:
-        # Pull strictly from the filtered features dataframe
-        final_feature_names = list(X_train_features.columns)
-        
+    # Just pass the already-defined final_feature_names directly!
     plot_feature_importance(final_model, final_feature_names, reports_dir)
 
     # Save Models
@@ -445,6 +511,7 @@ def run_pytorch_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir
         "best_C": best_params["C"],
         "best_lr": best_params["lr"],
         "val_accuracy": study.best_value,
+        "poly_features_kmeans": poly_features_kmeans,
         "pca_applied": add_pca,
         "weight_strategy": weight_strategy,
         "features_used": final_feature_names

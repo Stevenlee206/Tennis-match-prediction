@@ -144,7 +144,7 @@ def main():
     parser.add_argument("--df_n_trees_max", type=int, default=200)
     parser.add_argument("--df_depth_min", type=int, default=5)
     parser.add_argument("--df_depth_max", type=int, default=30)
-    
+    parser.add_argument("--poly_features_kmeans", action="store_true", help="Apply Poly Interactions + K-Means (PyTorch SVM only)")
     parser.add_argument("--weight_strategy", type=str, choices=["none", "static", "magnitude", "temporal"], default="none")
     parser.add_argument("--upset_weight", type=float, default=1.5)
     args = parser.parse_args()
@@ -292,7 +292,8 @@ def main():
         elif args.model == "pytorch_svm":
             run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, 
                          n_trials=args.n_trials, epochs=args.epochs, batch_size=args.batch_size, c_min=args.c_min, c_max=args.c_max,                         
-                         add_pca=args.add_pca, validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight,
+                         add_pca=args.add_pca, poly_features_kmeans=args.poly_features_kmeans, validation=args.validation, # <--- Added Here
+                         weight_strategy=args.weight_strategy, upset_weight=args.upset_weight,
                          torch_opt=args.torch_opt, torch_sched=args.torch_sched)
         elif args.model == "pytorch_mlp":
             run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, 
@@ -369,7 +370,23 @@ def main():
             # ---> NEW: Load the model's actual config to dictate architecture
             with open(config_path, 'r') as f:
                 cfg = json.load(f)
+            # ---> FIX: CORRECT PLACEMENT FOR POLY-KMEANS OVERRIDE <---
+            if cfg.get('poly_features_kmeans', False):
+                poly = joblib.load(check_path.parent / "svm_pytorch_poly.joblib")
+                selector = joblib.load(check_path.parent / "svm_pytorch_selector.joblib")
+                scaler_poly = joblib.load(check_path.parent / "svm_pytorch_scaler_poly.joblib")
+                kmeans = joblib.load(check_path.parent / "svm_pytorch_kmeans.joblib")
+                dist_scaler = joblib.load(check_path.parent / "svm_pytorch_dist_scaler.joblib")
                 
+                # Dynamically target the correct evaluation set
+                target_eval = X_val if args.validation == "holdout" else X_test_eval
+                
+                eval_poly = poly.transform(target_eval)
+                eval_sel = selector.transform(eval_poly)
+                eval_scaled = scaler_poly.transform(eval_sel)
+                eval_dists = kmeans.transform(eval_scaled)
+                eval_dists_scaled = dist_scaler.transform(eval_dists)
+                X_val_scaled = np.hstack((eval_scaled, eval_dists_scaled))   
             # Handle PCA if enabled IN THE SAVED MODEL
             if cfg.get('pca_applied', False):
                 if args.model in ["pytorch_svm", "pytorch_mlp", "tabnet", "deepforest"]:
@@ -434,9 +451,6 @@ def main():
                 # We MUST use the custom Dataset to generate the 3D rolling windows
                 val_dataset = TimeSeriesTennisDataset(X_val_scaled, y_val.values, window_size=5)
                 val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False)
-                
-                y_pred_val = []
-                
                 y_pred_val = []
                 y_prob_val = [] # Add a list to store probabilities
 
@@ -454,9 +468,6 @@ def main():
 
                 y_pred_val = np.array(y_pred_val)
                 y_prob_val = np.array(y_prob_val) # Convert to numpy array
-                        
-                
-                
                 # Because window_size=5, the dataset drops the first 4 matches. 
                 # We must truncate the evaluation data to match!
                 y_val = y_val.iloc[4:]
@@ -504,9 +515,10 @@ def main():
         elif args.model == "pytorch_svm":
             run_pipeline(X_train_val_pool, y_train_val_pool, None, None, global_out, global_rep, 
                          n_trials=args.n_trials, epochs=args.epochs, batch_size=args.batch_size, c_min=args.c_min, c_max=args.c_max,                         
-                         add_pca=args.add_pca, validation=args.validation, weight_strategy=args.weight_strategy, upset_weight=args.upset_weight,
+                         add_pca=args.add_pca, poly_features_kmeans=args.poly_features_kmeans, validation=args.validation,
+                         weight_strategy=args.weight_strategy, upset_weight=args.upset_weight,
                          torch_opt=args.torch_opt, torch_sched=args.torch_sched,
-                         n_splits=args.n_splits, tscv_test_size=tscv_test_size) # <-- NEW
+                         n_splits=args.n_splits, tscv_test_size=tscv_test_size) # <--- Added CV args here
                          
         elif args.model == "deepforest":
             run_pipeline(X_train_val_pool, y_train_val_pool, None, None, global_out, global_rep, 
@@ -590,7 +602,23 @@ def main():
             # ---> NEW: Load the model's actual config to dictate architecture
             with open(config_path, 'r') as f:
                 cfg = json.load(f)
+            # ---> FIX: CORRECT PLACEMENT FOR POLY-KMEANS OVERRIDE <---
+            if cfg.get('poly_features_kmeans', False):
+                poly = joblib.load(check_path.parent / "svm_pytorch_poly.joblib")
+                selector = joblib.load(check_path.parent / "svm_pytorch_selector.joblib")
+                scaler_poly = joblib.load(check_path.parent / "svm_pytorch_scaler_poly.joblib")
+                kmeans = joblib.load(check_path.parent / "svm_pytorch_kmeans.joblib")
+                dist_scaler = joblib.load(check_path.parent / "svm_pytorch_dist_scaler.joblib")
                 
+                # Dynamically target the correct evaluation set
+                target_eval = X_val if args.validation == "holdout" else X_test_eval
+                
+                eval_poly = poly.transform(target_eval)
+                eval_sel = selector.transform(eval_poly)
+                eval_scaled = scaler_poly.transform(eval_sel)
+                eval_dists = kmeans.transform(eval_scaled)
+                eval_dists_scaled = dist_scaler.transform(eval_dists)
+                X_test_scaled = np.hstack((eval_scaled, eval_dists_scaled))
             if cfg.get('pca_applied', False):
                 if args.model in ["pytorch_svm", "pytorch_mlp", "tabnet", "deepforest"]:
                     prefix = args.model.replace('pytorch_', '') + '_pytorch' if 'pytorch' in args.model else args.model
