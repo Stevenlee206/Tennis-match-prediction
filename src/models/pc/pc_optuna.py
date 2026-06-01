@@ -214,6 +214,7 @@ def objective(trial, X_train, y_train, X_val, y_val, add_pca=False, validation="
         "inference_lr": trial.suggest_float("inference_lr", 1e-3, 1.0, log=True),
         "inference_steps": trial.suggest_int("inference_steps", 5, 50),
         "hidden_activation": trial.suggest_categorical("hidden_activation", ["tanh", "relu"]),
+        "output_activation": "sigmoid",
         "random_seed": 42
     }
     
@@ -375,6 +376,7 @@ def run_pc_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
         inference_lr=best_params['inference_lr'],
         inference_steps=best_params['inference_steps'],
         hidden_activation=best_params['hidden_activation'],
+        output_activation="sigmoid",
         random_seed=42
     )
     

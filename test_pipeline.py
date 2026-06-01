@@ -155,7 +155,8 @@ def run_test_benchmark():
                 n_splits=3, # Fewer splits to speed up test
                 n_trials=1, # 1 Trial
                 epochs=1,   # 1 Epoch
-                patience=1
+                patience=1,
+                base_weights_path=base_weights
             )
             
             # Save params

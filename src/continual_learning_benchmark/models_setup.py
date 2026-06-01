@@ -109,7 +109,7 @@ def get_pcn_model(input_dim, mode, weights_path, config_path):
             
     return model
 
-def tune_hyperparameters_tscv(model_type, input_dim, X, y, n_splits=5, n_trials=10, epochs=50, patience=5):
+def tune_hyperparameters_tscv(model_type, input_dim, X, y, n_splits=5, n_trials=10, epochs=50, patience=5, base_weights_path=None):
     """
     Uses Optuna and Time-Series Walk-Forward CV to find optimal hyperparameters (lr, weight_decay, etc.).
     Includes Early Stopping.
@@ -135,6 +135,7 @@ def tune_hyperparameters_tscv(model_type, input_dim, X, y, n_splits=5, n_trials=
         # 2. Time-Series CV
         tscv = TimeSeriesSplit(n_splits=n_splits)
         fold_accs = []
+        fold_best_epochs = []
 
         for fold, (train_idx, val_idx) in enumerate(tscv.split(X)):
             X_train, X_val = X[train_idx], X[val_idx]
@@ -145,19 +146,28 @@ def tune_hyperparameters_tscv(model_type, input_dim, X, y, n_splits=5, n_trials=
                 model = TennisNet(input_dim, hidden_dim=128, num_blocks=0, dropout=dropout)
                 wrapper = NNWrapper(model, lr=lr)
                 wrapper.optimizer.param_groups[0]['weight_decay'] = wd
+                if base_weights_path and os.path.exists(base_weights_path):
+                    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+                    wrapper.load_state_dict(torch.load(base_weights_path, map_location=device, weights_only=True))
             elif model_type == "pcn":
                 device = "cuda" if torch.cuda.is_available() else "cpu"
                 cfg = PCNetworkConfig()
                 cfg.learning_rate = lr
                 cfg.inference_lr = inf_lr
                 cfg.inference_steps = inf_steps
+                cfg.output_activation = "sigmoid"
                 model = PredictiveCodingNetworkTorch(layer_sizes=[input_dim, 64, 32, 1], cfg=cfg, device=device)
                 wrapper = model
+                if base_weights_path and os.path.exists(base_weights_path):
+                    state = np.load(base_weights_path, allow_pickle=True)
+                    state_dict = {k: state[k] for k in state.files}
+                    wrapper.load_state_dict(state_dict)
 
             # Early Stopping setup
             best_val_loss = float('inf')
             epochs_no_improve = 0
             best_fold_acc = 0
+            best_epoch_for_fold = 1
 
             # 3. Train epochs
             for epoch in range(epochs):
@@ -183,6 +193,7 @@ def tune_hyperparameters_tscv(model_type, input_dim, X, y, n_splits=5, n_trials=
                 if val_loss_proxy < best_val_loss:
                     best_val_loss = val_loss_proxy
                     best_fold_acc = val_acc
+                    best_epoch_for_fold = epoch + 1
                     epochs_no_improve = 0
                 else:
                     epochs_no_improve += 1
@@ -191,15 +202,20 @@ def tune_hyperparameters_tscv(model_type, input_dim, X, y, n_splits=5, n_trials=
                     break # Early stopping
             
             fold_accs.append(best_fold_acc)
+            fold_best_epochs.append(best_epoch_for_fold)
 
+        trial.set_user_attr("optimal_epochs", int(np.mean(fold_best_epochs)))
         return np.mean(fold_accs)
 
     study = optuna.create_study(direction="maximize")
     study.optimize(objective, n_trials=n_trials)
     
+    best_params = study.best_trial.params
+    best_params["optimal_epochs"] = study.best_trial.user_attrs.get("optimal_epochs", epochs)
+    
     print(f"Best trial: {study.best_trial.value:.4f}")
-    print(f"Best params: {study.best_trial.params}")
-    return study.best_trial.params
+    print(f"Best params: {best_params}")
+    return best_params
 
 def train_model_full(model_type, input_dim, X: np.ndarray, y: np.ndarray, best_params, epochs=30, batch_size=64, base_weights_path=None):
     """
@@ -222,6 +238,7 @@ def train_model_full(model_type, input_dim, X: np.ndarray, y: np.ndarray, best_p
         cfg.learning_rate = best_params.get("lr", 0.001)
         cfg.inference_lr = best_params.get("inference_lr", 0.05)
         cfg.inference_steps = best_params.get("inference_steps", 20)
+        cfg.output_activation = "sigmoid"
         pcn_model = PredictiveCodingNetworkTorch(layer_sizes=[input_dim, 64, 32, 1], cfg=cfg, device=device)
         wrapper = pcn_model
         

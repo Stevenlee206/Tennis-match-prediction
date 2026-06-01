@@ -414,6 +414,7 @@ def main():
                     cfg = json.load(f)
                 
                 pc_cfg = PCNetworkConfig(**cfg.get('best_params', {}))
+                pc_cfg.output_activation = "sigmoid"
                 
                 # layer sizes include in and out
                 layer_sizes = [X_val_scaled.shape[1], *cfg['model_params']['hidden_sizes'], 1]
@@ -518,6 +519,7 @@ def main():
                     cfg = json.load(f)
                 
                 pc_cfg = PCNetworkConfig(**cfg.get('best_params', {}))
+                pc_cfg.output_activation = "sigmoid"
                 layer_sizes = [X_test_scaled.shape[1], *cfg['model_params']['hidden_sizes'], 1]
                 device = "cuda" if torch.cuda.is_available() else "cpu"
                 best_model = PredictiveCodingNetworkTorch(layer_sizes=layer_sizes, cfg=pc_cfg, device=device)
@@ -616,6 +618,7 @@ def main():
                     cfg = json.load(f)
                 
                 pc_cfg = PCNetworkConfig(**cfg.get('best_params', {}))
+                pc_cfg.output_activation = "sigmoid"
                 
                 # layer sizes include in and out
                 layer_sizes = [X_val_scaled.shape[1], *cfg['model_params']['hidden_sizes'], 1]

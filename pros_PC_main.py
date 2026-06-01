@@ -152,14 +152,20 @@ def run_benchmark():
                 
             # 1. Tune Hyperparameters using Time-Series CV
             n_trials = 20
-            best_params = tune_hyperparameters_tscv(model_type, input_dim, X_train_pool, y_train_pool, n_splits=5, n_trials=n_trials, epochs=30, patience=5)
+            max_epochs = 150 if model_type == "pcn" else 50
+            best_params = tune_hyperparameters_tscv(
+                model_type, input_dim, X_train_pool, y_train_pool, 
+                n_splits=5, n_trials=n_trials, epochs=max_epochs, patience=5,
+                base_weights_path=base_weights
+            )
             
             # Save params
             with open(os.path.join(mode_dir, 'best_params.json'), 'w') as f:
                 json.dump(best_params, f, indent=4)
                 
             # 2. Final Training on Full Pool
-            model, history = train_model_full(model_type, input_dim, X_train_pool, y_train_pool, best_params, epochs=30, batch_size=64, base_weights_path=base_weights)
+            optimal_epochs = best_params.get("optimal_epochs", max_epochs)
+            model, history = train_model_full(model_type, input_dim, X_train_pool, y_train_pool, best_params, epochs=optimal_epochs, batch_size=64, base_weights_path=base_weights)
             
             # Plot Learning Curves
             plot_learning_curves(history, title=f'{model_type.upper()} {mode.capitalize()} Learning Curves', save_path=os.path.join(mode_dir, 'learning_curves.png'))
