@@ -1,6 +1,6 @@
 import pandas as pd
-from src.model.Logistic_Regression.log_reg_model import build_model
-from src.model.Logistic_Regression.trainer import time_series_cv
+from models.logistic_reg.log_reg_model import build_model
+from models.logistic_reg.trainer import time_series_cv
 
 def run_logistic_regression():
     print("Loading data")
