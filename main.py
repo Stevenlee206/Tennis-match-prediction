@@ -124,6 +124,9 @@ def main():
     parser.add_argument("--upset_weight", type=float, default=2.0, help="The base penalty multiplier for upsets (Used if strategy is not 'none').")
     parser.add_argument("--config", type=str, default="", help="Path to JSON config file to override arguments")
     
+    parser.add_argument("--eval_only", action="store_true", help="Skip training and only evaluate on the test set.")
+    parser.add_argument("--weights_dir", type=str, default="", help="Directory containing the pre-trained weights for evaluation.")
+    
     args = parser.parse_args()
     
     if args.config:
@@ -249,7 +252,7 @@ def main():
     # ==========================================
     # ROUTE A: STANDARD HOLDOUT VALIDATION
     # ==========================================
-    if args.validation == "holdout":
+    if args.validation == "holdout" and not args.eval_only:
         X_train, X_val, y_train, y_val = train_test_split(
             X_train_val_pool, y_train_val_pool, test_size=0.2, shuffle=False
         )
@@ -307,7 +310,7 @@ def main():
                          n_trees_min=args.df_n_trees_min, n_trees_max=args.df_n_trees_max,
                          max_depth_min=args.df_depth_min, max_depth_max=args.df_depth_max)
 
-        elif args.model == "predictive_coding":
+        elif args.model == "predictive_coding" and not args.eval_only:
             run_pipeline(X_train, y_train, X_val, y_val, BASE_OUT, BASE_REP, 
                          n_trials=args.n_trials, validation=args.validation, optimizer=args.optimizer,
                          weight_strategy=args.weight_strategy, upset_weight=args.upset_weight)
@@ -408,8 +411,8 @@ def main():
                     y_pred_val = (torch.sigmoid(preds_raw) > 0.5).cpu().numpy().astype(int).flatten()              
             elif args.model == "predictive_coding":
                 import torch
-                from src.model.Predictive_Coding.pc_network_torch import PredictiveCodingNetworkTorch
-                from src.model.Predictive_Coding.pc_network import PCNetworkConfig
+                from src.models.predictive_coding.pc_network_torch import PredictiveCodingNetworkTorch
+                from src.models.predictive_coding.pc_network import PCNetworkConfig
                 with open(config_path, 'r') as f:
                     cfg = json.load(f)
                 
@@ -439,7 +442,7 @@ def main():
     # ==========================================
     # ROUTE B: WALK-FORWARD VALIDATION (Global TSCV)
     # ==========================================
-    elif args.validation == "walk_forward":
+    elif args.validation == "walk_forward" and not args.eval_only:
         print("\n" + "="*50)
         print(" RUNNING GLOBAL TIME-SERIES CROSS VALIDATION")
         print("="*50)
@@ -484,13 +487,13 @@ def main():
                          n_trees_min=args.df_n_trees_min, n_trees_max=args.df_n_trees_max,
                          max_depth_min=args.df_depth_min, max_depth_max=args.df_depth_max)
 
-        elif args.model == "predictive_coding":
+        elif args.model == "predictive_coding" and not args.eval_only:
             run_pipeline(X_train_val_pool, y_train_val_pool, None, None, global_out, global_rep, 
                          n_trials=args.n_trials, validation=args.validation, optimizer=args.optimizer,
                          weight_strategy=args.weight_strategy, upset_weight=args.upset_weight,
                          precomputed_folds=precomputed_folds)
 
-        elif args.model == "rf":
+        elif args.model == "rf" and not args.eval_only:
             run_pipeline(X_train_val_pool, y_train_val_pool, None, None, global_out, global_rep, 
                           n_trials=args.n_trials, n_est_min=args.rf_n_est_min, n_est_max=args.rf_n_est_max, 
                           depth_min=args.rf_depth_min, depth_max=args.rf_depth_max, variant=args.rf_variant,
@@ -504,17 +507,17 @@ def main():
             print(" FINAL EVALUATION ON UNSEEN TEST SET (90-10)")
             print("="*50)
             model_name, scaler_name, config_name = "pc_model.npz", "pc_scaler.joblib", "pc_config.json"
-            model_path = global_out / model_name
-            scaler_path = global_out / scaler_name
-            config_path = global_out / config_name
+            model_path = Path(args.weights_dir) / model_name if args.weights_dir else global_out / model_name
+            scaler_path = Path(args.weights_dir) / scaler_name if args.weights_dir else global_out / scaler_name
+            config_path = Path(args.weights_dir) / config_name if args.weights_dir else global_out / config_name
             
             if model_path.exists() and scaler_path.exists():
                 scaler = joblib.load(scaler_path)
                 X_test_scaled = scaler.transform(X_test)
                 
                 import torch
-                from src.model.Predictive_Coding.pc_network_torch import PredictiveCodingNetworkTorch
-                from src.model.Predictive_Coding.pc_network import PCNetworkConfig
+                from src.models.predictive_coding.pc_network_torch import PredictiveCodingNetworkTorch
+                from src.models.predictive_coding.pc_network import PCNetworkConfig
                 with open(config_path, 'r') as f:
                     cfg = json.load(f)
                 
@@ -531,7 +534,7 @@ def main():
                 
                 bias_metrics = evaluate_model_bias(y_test.values, y_pred_test, X_test, dataset_name="(UNSEEN TEST SET)")
                 
-                from src.model.util.metrics import binary_classification_metrics
+                from src.models.utils.metrics import binary_classification_metrics
                 final_test_metrics = binary_classification_metrics(y_test.values, probs)
                 print("\nFINAL METRICS ON UNSEEN TEST SET:")
                 for k, v in final_test_metrics.items():
@@ -560,9 +563,9 @@ def main():
         else:
             model_name, scaler_name, config_name = f"{args.rf_variant}_model.joblib", f"{args.rf_variant}_scaler.joblib", f"{args.rf_variant}_config.json"
             
-        model_path = global_out / model_name
-        scaler_path = global_out / scaler_name
-        config_path = global_out / config_name
+        model_path = Path(args.weights_dir) / model_name if args.weights_dir else global_out / model_name
+        scaler_path = Path(args.weights_dir) / scaler_name if args.weights_dir else global_out / scaler_name
+        config_path = Path(args.weights_dir) / config_name if args.weights_dir else global_out / config_name
         
         check_path = Path(str(model_path)) if args.model != "tabnet" else Path(str(model_path).replace('.zip', '') + '.zip')
 
@@ -612,8 +615,8 @@ def main():
                     y_pred_val = (preds_raw > 0).cpu().numpy().astype(int)
             elif args.model == "predictive_coding":
                 import torch
-                from src.model.Predictive_Coding.pc_network_torch import PredictiveCodingNetworkTorch
-                from src.model.Predictive_Coding.pc_network import PCNetworkConfig
+                from src.models.predictive_coding.pc_network_torch import PredictiveCodingNetworkTorch
+                from src.models.predictive_coding.pc_network import PCNetworkConfig
                 with open(config_path, 'r') as f:
                     cfg = json.load(f)
                 

@@ -1,6 +1,0 @@
-{
-    "lr": 0.0023197157684077792,
-    "inference_lr": 0.053159065532428426,
-    "inference_steps": 14,
-    "optimal_epochs": 1
-}
