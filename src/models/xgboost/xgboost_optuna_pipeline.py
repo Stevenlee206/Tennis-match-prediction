@@ -79,13 +79,12 @@ def run_xgboost_optuna_pipeline(X_train, y_train, X_val, y_val,
             'subsample': trial.suggest_float('subsample', 0.6, 1.0),
             'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0),
             'gamma': trial.suggest_float('gamma', 0.0, 2.0),
-            'enable_categorical': True,
             'tree_method': 'hist',
             'eval_metric': 'logloss',
             'random_state': 42
         }
 
-        if X_val is not None:
+        if validation == "holdout" and X_val is not None:
             # Holdout
             X_tr_proc, X_v_proc, _ = apply_transforms(X_train, X_val)
 
@@ -126,7 +125,7 @@ def run_xgboost_optuna_pipeline(X_train, y_train, X_val, y_val,
 
     # Train final model
     print("\n Training final model with best params...")
-    if validation == "holdout" and X_val is not None:
+    if  X_val is not None:
         X_final_raw = pd.concat([X_train, X_val])
         y_final = pd.concat([y_train, y_val])
     else:

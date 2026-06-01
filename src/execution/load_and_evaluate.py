@@ -3,6 +3,8 @@ import joblib
 import numpy as np
 from pathlib import Path
 from src.execution.bias_analysis import evaluate_model_bias, append_metrics_to_config
+from src.execution.model_interpretation import calculate_feature_importances, plot_interpretability
+
 def _get_file_names(args):
     """Xác định tên file model, scaler và config dựa trên thuật toán."""
     if args.model == "svm":
@@ -24,6 +26,8 @@ def _get_file_names(args):
 
     elif args.model == "xgboost":
         return "xgboost_model.joblib", "xgboost_scaler.joblib", "xgboost_config.json"
+    elif args.model == "decisiontree":
+        return "decisiontree_model.joblib", "decisiontree_scaler.joblib", "decisiontree_config.json"
 
     else:  # Random Forest variants
         return f"{args.rf_variant}_model.joblib", f"{args.rf_variant}_scaler.joblib", f"{args.rf_variant}_config.json"
@@ -151,3 +155,66 @@ def load_and_evaluate_model(args, X_eval, y_eval, out_dir):
         append_metrics_to_config(config_path, bias_metrics)
     else:
         print(f"Không tìm thấy {config_name} để ghi kết quả đánh giá.")
+
+    # 7.1. Tái tạo lại danh sách Feature Names từ dữ liệu thô
+    feature_names = list(X_eval_raw.columns)
+    # Xử lý đổi tên nếu có dùng PCA (giảm chiều)
+    if getattr(args, 'add_pca', False) and pca_path.exists():
+        feature_names = [f"PCA_{i}" for i in range(X_eval_scaled.shape[1])]
+
+        # Xử lý nối thêm tên nếu có dùng KMeans (thêm cụm)
+    if getattr(args, 'add_kmeans', False) and kmeans_path.exists():
+        n_clusters = getattr(args, 'n_clusters', 5)
+        cluster_names = [f"KMeans_Dist_{i}" for i in range(n_clusters)]
+        if not getattr(args, 'add_pca', False):
+            feature_names.extend(cluster_names)
+
+        # 7.2. Kích hoạt tính toán và vẽ biểu đồ
+    if args.model not in ["pytorch_svm", "pytorch_mlp"]:
+        # Gọi hàm 1: Tính toán độ quan trọng
+        importances = calculate_feature_importances(
+            model=model,
+            X_eval=X_eval_scaled,
+            y_eval=y_eval.values
+        )
+
+        # Gọi hàm 2: Truyền kết quả vào để vẽ
+        plot_interpretability(
+            model=model,
+            X_eval=X_eval_scaled,
+            importances=importances,
+            feature_names=feature_names,
+            out_dir=out_dir,
+            model_name=args.model
+        )
+    else:
+        print(f"\n[*] Bỏ qua Feature Importance/PDP cho {args.model}.")
+
+     # 8. ERROR ANALYSIS & HYPOTHESIS TESTING
+    print("\n" + "=" * 50)
+    print(f"[*] ĐANG PHÂN TÍCH LỖI MÔ HÌNH (ERROR ANALYSIS)")
+    print("=" * 50)
+
+    from src.execution.prediction_analysis import (
+        plot_prediction_summary,
+        plot_confidence_analysis,
+        plot_all_features_errors
+    )
+
+    # 8.1. Kiểm tra Giả thuyết Phân bổ nhãn
+    plot_prediction_summary(y_eval.values, y_pred, out_dir, args.model)
+
+    # 8.2. Kiểm tra Giả thuyết Độ tự tin (Yêu cầu model có hàm predict_proba)
+    if hasattr(model, "predict_proba"):
+        try:
+        # Lấy xác suất của class 1 (Player 1 thắng)
+            y_prob = model.predict_proba(X_eval_scaled)[:, 1]
+            plot_confidence_analysis(y_eval.values, y_prob, out_dir, args.model)
+        except Exception as e:
+            print(f"⚠️ Không thể vẽ biểu đồ Confidence: {str(e)}")
+    else:
+        print(f"-> Bỏ qua biểu đồ Confidence do {args.model} không hỗ trợ predict_proba.")
+
+        # 8.3. Kiểm tra Giả thuyết Lỗi do chỉ số quá sát nhau (Dùng elo_diff)
+        # Bạn có thể thay đổi 'elo_diff' thành bất kỳ feature nào bạn muốn test (vd: 'days_since_last_match_diff')
+    plot_all_features_errors(X_eval_raw, y_eval.values, y_pred, out_dir, args.model)

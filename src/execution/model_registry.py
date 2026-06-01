@@ -27,10 +27,18 @@ DISPATCH_TABLE = {
     'xgboost': {
         'custom': ('src.models.xgboost.xgboost_pipeline', 'run_xgboost_pipeline'),
         'ga':     ('src.models.xgboost.xgboost_ga_pipeline', 'run_xgboost_ga_pipeline'),
-        'random': ('src.models.xgboost.xgboost_r_pipeline', 'run_xgboost_random_pipeline'),
+        'random': ('src.models.xgboost.xgboost_rs_pipeline', 'run_xgboost_random_pipeline'),
         'optuna': ('src.models.xgboost.xgboost_optuna_pipeline', 'run_xgboost_optuna_pipeline'),
         'grid':   ('src.models.xgboost.xgboost_grid_pipeline', 'run_xgboost_grid_pipeline'),
         'pso':    ('src.models.xgboost.xgboost_pso_pipeline', 'run_xgboost_pso_pipeline')
+    },
+    'decisiontree':{
+        'custom': ('src.models.decisiontree.decision_tree_custom_pipeline', 'run_decision_tree_unlimited_pipeline'),
+        'ga':     ('src.models.decisiontree.decision_tree_ga_pipeline', 'run_decision_tree_ga_pipeline'),
+        'random': ('src.models.decisiontree.decision_tree_rs_pipeline', 'run_decision_tree_random_pipeline'),
+        'optuna': ('src.models.decisiontree.decision_tree_optuna_pipeline', 'run_decision_tree_optuna_pipeline'),
+        'grid':   ('src.models.decisiontree.decision_tree_grid_pipeline', 'run_decision_tree_grid_pipeline'),
+        'pso':    ('src.models.decisiontree.decision_tree_pso_pipeline', 'run_decision_tree_pso_pipeline')
     }
 }
 

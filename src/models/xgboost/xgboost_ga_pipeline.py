@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from xgboost import XGBClassifier
 from sklearn.model_selection import TimeSeriesSplit, PredefinedSplit
-from sklearn.preprocessing import FunctionTransformer
 from sklearn_genetic import GASearchCV
 from sklearn_genetic.space import Integer, Continuous
 from sklearn.preprocessing import StandardScaler
@@ -74,14 +73,18 @@ def run_xgboost_ga_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_
         eval_metric='logloss',
         random_state=42
     )
+    pipeline_steps = Pipeline([
+        ('scaler', StandardScaler()),
+        ('model', clf)
+    ])
 
     param_grid = {
-        'n_estimators': Integer(100, 800),
-        'max_depth': Integer(3, 8),
-        'learning_rate': Continuous(0.01, 0.2, distribution='log-uniform'),
-        'subsample': Continuous(0.6, 0.9),
-        'colsample_bytree': Continuous(0.6, 0.9),
-        'gamma': Continuous(0, 2)
+        'model__n_estimators': Integer(100, 800),
+        'model__max_depth': Integer(3, 8),
+        'model__learning_rate': Continuous(0.01, 0.2, distribution='log-uniform'),
+        'model__subsample': Continuous(0.6, 1.0),
+        'model__colsample_bytree': Continuous(0.6, 1.0),
+        'model__gamma': Continuous(0.0, 2.0)
     }
 
     if validation == "holdout" and X_val is not None:
@@ -97,7 +100,7 @@ def run_xgboost_ga_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_
 
     # 2. Chạy Tiến hóa
     evolved_estimator = GASearchCV(
-        estimator=clf,
+        estimator=pipeline_steps,
         cv=cv_strategy,
         scoring='neg_log_loss',
         param_grid=param_grid,
@@ -121,7 +124,7 @@ def run_xgboost_ga_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_
     plot_ga_results(evolved_estimator, reports_dir)
 
     print("\n Train final model on best params ...")
-    if validation == "holdout" and X_val is not None:
+    if  X_val is not None:
         X_final_raw = pd.concat([X_train, X_val])
         y_final = pd.concat([y_train, y_val])
     else:

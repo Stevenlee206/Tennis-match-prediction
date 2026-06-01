@@ -129,8 +129,18 @@ def parse_arguments():
     opt_group.add_argument("--xgb_grid_colsample", type=float, nargs='+',
                            default=[0.8, 1.0])
 
-    args = parser.parse_args()
+    # decision tree
+    opt_group.add_argument("--dt_grid_max_depth", type=int, nargs='+',
+                           default=[3, 5, 7, 10])
+    opt_group.add_argument("--dt_grid_min_split", type=int, nargs='+',
+                           default=[2, 20, 50])
+    opt_group.add_argument("--dt_grid_min_leaf", type=int, nargs='+',
+                           default=[1, 10, 30])
+    opt_group.add_argument("--dt_grid_criterion", type=str, nargs='+',
+                           default=['gini', 'entropy'])
 
+
+    args = parser.parse_args()
 
     if args.mode == "sgd" and args.model != "svm":
         raise ValueError("Error: SGD mode is currently only implemented for SVM (--model svm).")
