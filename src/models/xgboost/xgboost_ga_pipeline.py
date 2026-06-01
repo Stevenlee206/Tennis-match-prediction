@@ -9,36 +9,39 @@ from sklearn.model_selection import TimeSeriesSplit, PredefinedSplit
 from sklearn.preprocessing import FunctionTransformer
 from sklearn_genetic import GASearchCV
 from sklearn_genetic.space import Integer, Continuous
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
 
 
 def plot_ga_results(evolved_estimator, reports_dir):
     """
-    Trích xuất lịch sử tiến hóa từ GA và vẽ biểu đồ sự hội tụ của mô hình qua từng thế hệ.
+    Extract the evolutionary history from GA and plot the convergence of the model across generations.
     """
     history = evolved_estimator.history
     if not history or "gen" not in history:
-        print("[!] Không tìm thấy dữ liệu lịch sử tiến hóa để vẽ biểu đồ.")
+        print("[!] No evolutionary history data was found to plot the graph.")
         return
 
     generations = history["gen"]
 
-    # Do scoring='neg_log_loss' (số âm), ta nhân -1 để chuyển về Log Loss chuẩn (dương)
-    # Log loss càng thấp thì mô hình càng tốt
-    best_log_loss = [-x for x in history["fitness_max"]]  # fitness_max của số âm là giá trị gần 0 nhất
-    mean_log_loss = [-x for x in history["fitness"]]  # trung bình của quần thể
+    # Since scoring='neg_log_loss' (negative number), we multiply by -1 to convert it to standard Log Loss (positive).
+    # The lower the Log Loss, the better the model.
+    best_log_loss = [-x for x in history["fitness_max"]]  # fitness_max of a negative number is the value closest to 0
+    mean_log_loss = [-x for x in history["fitness"]]  # mean log loss of population
 
     plt.figure(figsize=(10, 6))
-    plt.plot(generations, best_log_loss, label='Best Log Loss (Cá thể xuất sắc nhất)',
-             color='red', marker='*',
+    plt.plot(generations, best_log_loss, label='Best Log Loss (Outstanding Individual)',
+             color='red', marker='s',
              markersize=8, linewidth=2)
-    plt.plot(generations, mean_log_loss, label='Average Log Loss (Trung bình quần thể)',
+    plt.plot(generations, mean_log_loss, label='Average Log Loss (Population)',
              color='teal', linestyle='--',
              marker='o', markersize=5)
 
-    plt.title('Genetic Algorithm Evolution History\n(XGBoost Hyperparameter Tuning)', fontsize=14, fontweight='bold',
-              pad=15)
-    plt.xlabel('Generation (Thế hệ)', fontsize=11)
-    plt.ylabel('Log Loss (Càng thấp càng tốt)', fontsize=11)
+    plt.title('Genetic Algorithm Evolution History\n(XGBoost Hyperparameter Tuning)',
+              fontsize=14, fontweight='bold',pad=15)
+
+    plt.xlabel('Generation ', fontsize=11)
+    plt.ylabel('Log Loss', fontsize=11)
     plt.legend()
     plt.grid(True, linestyle='--', alpha=0.7)
     plt.tight_layout()
@@ -46,11 +49,12 @@ def plot_ga_results(evolved_estimator, reports_dir):
     save_path = reports_dir / "xgboost_ga_tuning_history.png"
     plt.savefig(save_path, dpi=300)
     plt.close()
-    print(f"[*] Đã lưu biểu đồ Lịch sử tiến hóa GA tại: {save_path.name}")
+    print(f"[*] The GA Evolution History chart has been saved at: {save_path.name}")
 
 
 def run_xgboost_ga_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
-                            population=30, generations=40, **kwargs):
+                            population=30, generations=40,validation="holdout",
+                            n_splits=5, tscv_test_size=None, **kwargs):
     output_dir, reports_dir = Path(output_dir), Path(reports_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     reports_dir.mkdir(parents=True, exist_ok=True)
@@ -59,14 +63,13 @@ def run_xgboost_ga_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_
     scaler_path = output_dir / "xgboost_scaler.joblib"
 
     if model_path.exists() and scaler_path.exists():
-        print(f"\n[!] Tìm thấy model tại {output_dir.name}. Bỏ qua huấn luyện!")
+        print(f"\n[!] Find model at {output_dir.name}. Skip training !")
         return joblib.load(model_path), joblib.load(scaler_path)
 
     print(f"\n Hyperparameter tuning XGBoost by Genetic Algorithm (Pop: {population}, Gen: {generations})")
 
-    # 1. Khởi tạo mô hình và không gian tìm kiếm
+    # Init space and model
     clf = XGBClassifier(
-        enable_categorical=True,
         tree_method='hist',
         eval_metric='logloss',
         random_state=42
@@ -81,61 +84,59 @@ def run_xgboost_ga_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_
         'gamma': Continuous(0, 2)
     }
 
-    # --- LUÂN CHUYỂN CHIẾN LƯỢC CROSS-VALIDATION ---
-    if X_val is not None:
-        print("-> Sử dụng tập Validation cố định (Holdout)")
+    if validation == "holdout" and X_val is not None:
+        print("Holdout")
         X_cv = pd.concat([X_train, X_val])
         y_cv = pd.concat([y_train, y_val])
         test_fold = np.concatenate([np.full(len(X_train), -1), np.full(len(X_val), 0)])
         cv_strategy = PredefinedSplit(test_fold)
     else:
-        print("-> Sử dụng Time-Series CV 3-folds (Walk-Forward)")
         X_cv = X_train
         y_cv = y_train
-        cv_strategy = TimeSeriesSplit(n_splits=3)
+        cv_strategy = TimeSeriesSplit(n_splits=n_splits, test_size=tscv_test_size)
 
     # 2. Chạy Tiến hóa
     evolved_estimator = GASearchCV(
         estimator=clf,
-        cv=cv_strategy,  # Nhận chiến lược được gán ở trên
+        cv=cv_strategy,
         scoring='neg_log_loss',
         param_grid=param_grid,
         population_size=population,
         generations=generations,
         tournament_size=3,
         elitism=True,
+        mutation_probability=0.25,
+        crossover_probability=0.75,
         verbose=True,
         n_jobs=-1
     )
 
     evolved_estimator.fit(X_cv, y_cv)
 
-    best_params = evolved_estimator.best_params_
-    print(f"-> Tham số tốt nhất từ GA: {best_params}")
+    raw_best_params = evolved_estimator.best_params_
+    best_params = {k.replace('model__', ''): v for k, v in raw_best_params.items()}
+    print(f"-> Best parameters from GA: {best_params}")
 
-    # Vẽ biểu đồ tiến hóa
+    # Plot
     plot_ga_results(evolved_estimator, reports_dir)
 
-    # 3. Huấn luyện Final Model với dữ liệu tối đa (Train + Val)
-    print("\nHuấn luyện final model với bộ tham số tốt nhất...")
-    if X_val is not None:
-        X_final = pd.concat([X_train, X_val])
+    print("\n Train final model on best params ...")
+    if validation == "holdout" and X_val is not None:
+        X_final_raw = pd.concat([X_train, X_val])
         y_final = pd.concat([y_train, y_val])
     else:
-        X_final, y_final = X_train, y_train
+        X_final_raw, y_final = X_train, y_train
 
-    final_clf = XGBClassifier(**best_params, enable_categorical=True, tree_method='hist', eval_metric='logloss',
+    final_scaler = StandardScaler()
+    X_final_proc = final_scaler.fit_transform(X_final_raw)
+    final_clf = XGBClassifier(**best_params, tree_method='hist',
+                              eval_metric='logloss',
                               random_state=42)
-    final_clf.fit(X_final, y_final)
 
-    # 4. Dummy Scaler
-    dummy_scaler = FunctionTransformer(func=None)
-    dummy_scaler.fit(X_final)
-
-    # 5. Lưu kết quả
+    final_clf.fit(X_final_proc, y_final)
+    # Save result
     joblib.dump(final_clf, model_path)
-    joblib.dump(dummy_scaler, scaler_path)
-
+    joblib.dump(final_scaler, scaler_path)
     config = {
         "model_type": "XGBoost_GA",
         "best_params": best_params
@@ -143,4 +144,4 @@ def run_xgboost_ga_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_
     with open(output_dir / "xgboost_config.json", "w") as f:
         json.dump(config, f, indent=4)
 
-    return final_clf, dummy_scaler
+    return final_clf, final_scaler
