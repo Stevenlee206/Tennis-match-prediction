@@ -66,7 +66,7 @@ def generate_sample_weights(X_raw, y_raw, strategy="none", base_weight=1.0):
                 weights[i] = 1.0 + ((base_weight - 1.0) * decay_curve[i])
     return weights
 
-# Plotting Utilities
+# Plotting
 def plot_optuna_history(study, save_path):
     plt.figure(figsize=(10, 6))
     trials = study.trials_dataframe()
@@ -83,7 +83,6 @@ def plot_optuna_history(study, save_path):
 def plot_feature_importance(model, feature_names, save_path):
     # Extract weights from the single linear layer
     importances = model.linear.weight.data.cpu().numpy()[0]
-    
     importance_df = pd.DataFrame({
         'Feature': feature_names,
         'Coefficient': importances,
@@ -153,7 +152,7 @@ def get_optimizer_and_scheduler(model, lr, l2_lambda, opt_choice, sched_choice, 
     return opt, sched
 
 def apply_transforms(X_train, X_val=None, add_pca=False, add_kmeans=False, n_clusters=5):
-    """Đóng gói logic Scaler, PCA và KMeans để tái sử dụng."""
+    """Encapsulate logic Scaler, PCA and KMeans to reuse."""
     scaler = StandardScaler()
     X_train_proc = scaler.fit_transform(X_train)
     X_val_proc = scaler.transform(X_val) if X_val is not None else None
@@ -177,7 +176,7 @@ def apply_transforms(X_train, X_val=None, add_pca=False, add_kmeans=False, n_clu
     return X_train_proc, X_val_proc, scaler, pca_model, kmeans_model
 
 def save_pipeline_artifacts(output_dir, reports_dir, model, scaler, pca, kmeans, study, history, config, feature_names):
-    """Gom toàn bộ lệnh save file và vẽ biểu đồ vào một chỗ."""
+    """Combine all file save and chart drawing commands into one place."""
     torch.save(model.state_dict(), output_dir / "svm_pytorch_model.pth")
     joblib.dump(scaler, output_dir / "svm_pytorch_scaler.joblib")
     if pca: joblib.dump(pca, output_dir / "svm_pytorch_pca.joblib")

@@ -118,9 +118,7 @@ def plot_feature_importance(clf, feature_names, save_path):
     plt.savefig(save_path / "feature_importance.png", dpi=300)
     plt.close()
 
-# ==========================================
 # Main Execution Pipeline
-# ==========================================
 def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, pop_size=20, n_generations=20, kernel="linear"):
     output_dir = Path(output_dir)
     reports_dir = Path(reports_dir)

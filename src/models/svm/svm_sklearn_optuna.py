@@ -56,7 +56,6 @@ def objective(trial, X_train, y_train, X_val, y_val, kernel, c_min=1e-3, c_max=1
     if kernel == 'poly':
         params['degree'] = trial.suggest_int('degree', 2, 5)
 
-    # ==========================================
     # STRATEGY 1: STANDARD HOLDOUT
     # ==========================================
     if validation == "holdout":
@@ -84,11 +83,8 @@ def objective(trial, X_train, y_train, X_val, y_val, kernel, c_min=1e-3, c_max=1
         
         return accuracy_score(y_val, val_preds)
         
-    # ==========================================
-    # STRATEGY 2: WALK-FORWARD (TSCV)
-    # ==========================================
+    # walk_forward ( TCSV )
     elif validation == "walk_forward":
-        # ---> UPDATED HERE <---
         tscv = TimeSeriesSplit(n_splits=n_splits, test_size=tscv_test_size)
         fold_accuracies = []
         
@@ -242,8 +238,7 @@ def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
     print(f"Optuna Val Accuracy:   {study.best_value * 100:.2f}%")
     
     if (train_acc - study.best_value) > 0.10:
-        print("⚠️ WARNING: High likelihood of overfitting. The model is memorizing the training data.")
-    print("-" * 30 + "\n") 
+        print("-" * 30 + "\n")
     
     joblib.dump(final_clf, model_path)
     joblib.dump(scaler, scaler_path)
