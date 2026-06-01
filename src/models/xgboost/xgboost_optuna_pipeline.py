@@ -9,36 +9,36 @@ from xgboost import XGBClassifier
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import log_loss
 from sklearn.preprocessing import FunctionTransformer
+filefrom sklearn.preprocessing import StandardScaler
 
 
-def plot_optuna_results(study, reports_dir):
+def plot_optuna_results(study : optuna.study.Study, reports_dir : Path):
     """
-    Trích xuất dữ liệu từ Optuna Study và vẽ biểu đồ Lịch sử Tối ưu.
+    Extract data and plot
     """
-    df = study.trials_dataframe()
-    # Chỉ lấy những trial thành công
+    df = study.trials_dataframe() # Extract to df
+    # Take success trial
     df = df[df['state'] == 'COMPLETE']
 
     if df.empty:
-        print("[!] Không có dữ liệu trial hợp lệ để vẽ biểu đồ.")
+        print("[!] There is no valid trial data to plot..")
         return
 
     trials = df['number']
     values = df['value']
-    # cummin() giúp tạo một đường line giữ lại giá trị tốt nhất (thấp nhất) tính đến thời điểm hiện tại
+    # cummin() helps create a line that retains the best (lowest) value up to the current time.
     best_values = values.cummin()
-
     plt.figure(figsize=(10, 6))
 
-    # Vẽ các chấm rải rác thể hiện từng Trial
+    # Each point correspond to a Trial
     plt.scatter(trials, values, alpha=0.6, color='teal', label='Trial Value (Log Loss)')
 
-    # Vẽ đường line thể hiện quá trình hội tụ
-    plt.plot(trials, best_values, color='red', linewidth=2.5, label='Best Value (Hội tụ)')
+    # Draw a line to show the convergence process
+    plt.plot(trials, best_values, color='red', linewidth=2.5, label='Best Value (Convergence)')
 
     plt.title('Optuna Optimization History\n(XGBoost Hyperparameter Tuning)', fontsize=14, fontweight='bold', pad=15)
-    plt.xlabel('Trial Number (Số vòng thử nghiệm)', fontsize=11)
-    plt.ylabel('Log Loss (Càng thấp càng tốt)', fontsize=11)
+    plt.xlabel('Trial Number', fontsize=11)
+    plt.ylabel('Log Loss', fontsize=11)
     plt.legend()
     plt.grid(True, linestyle='--', alpha=0.7)
     plt.tight_layout()
@@ -46,11 +46,18 @@ def plot_optuna_results(study, reports_dir):
     save_path = reports_dir / "xgboost_optuna_tuning_history.png"
     plt.savefig(save_path, dpi=300)
     plt.close()
-    print(f"[*] Đã lưu biểu đồ Lịch sử Optuna tại: {save_path.name}")
+    print(f"[*] The Optuna History chart has been saved at: {save_path.name}")
 
+def apply_transforms(X_train, X_val=None):
+    scaler = StandardScaler()
+    X_train_proc = scaler.fit_transform(X_train)
+    X_val_proc = scaler.transform(X_val) if X_val is not None else None
+    return X_train_proc, X_val_proc, scaler
 
-def run_xgboost_optuna_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
-                                n_trials=30, **kwargs):
+def run_xgboost_optuna_pipeline(X_train, y_train, X_val, y_val,
+                                output_dir, reports_dir,
+                                n_trials=30,validation="holdout", n_splits=5,
+                                tscv_test_size=None, **kwargs):
     output_dir, reports_dir = Path(output_dir), Path(reports_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     reports_dir.mkdir(parents=True, exist_ok=True)
@@ -59,10 +66,10 @@ def run_xgboost_optuna_pipeline(X_train, y_train, X_val, y_val, output_dir, repo
     scaler_path = output_dir / "xgboost_scaler.joblib"
 
     if model_path.exists() and scaler_path.exists():
-        print(f"\n[!] Tìm thấy model tại {output_dir.name}. Bỏ qua huấn luyện!")
+        print(f"\n[!] Find model at {output_dir.name}. Skip training!")
         return joblib.load(model_path), joblib.load(scaler_path)
 
-    print(f"\n--- Bắt đầu tối ưu XGBoost bằng Optuna ({n_trials} trials) ---")
+    print(f"\n--- Start optimize xgboost by Optuna ({n_trials} trials) ---")
 
     def objective(trial):
         param = {
@@ -78,60 +85,62 @@ def run_xgboost_optuna_pipeline(X_train, y_train, X_val, y_val, output_dir, repo
             'random_state': 42
         }
 
-        # --- LUÂN CHUYỂN CHIẾN LƯỢC CROSS-VALIDATION BÊN TRONG OPTUNA ---
         if X_val is not None:
-            # 1. Chế độ Holdout (Tĩnh)
+            # Holdout
+            X_tr_proc, X_v_proc, _ = apply_transforms(X_train, X_val)
+
             model = XGBClassifier(**param)
-            model.fit(X_train, y_train)
-            preds = model.predict_proba(X_val)
+            model.fit(X_tr_proc, y_train)
+            preds = model.predict_proba(X_v_proc)
             return log_loss(y_val, preds)
 
         else:
-            # 2. Chế độ Walk-Forward (Time-Series CV)
-            tscv = TimeSeriesSplit(n_splits=3)
+            # Walk-Forward (Time-Series CV)
+            tscv = TimeSeriesSplit(n_splits=n_splits, test_size=tscv_test_size)
             cv_scores = []
             for train_idx, val_idx in tscv.split(X_train):
                 X_tr, X_v = X_train.iloc[train_idx], X_train.iloc[val_idx]
                 y_tr, y_v = y_train.iloc[train_idx], y_train.iloc[val_idx]
 
-                model = XGBClassifier(**param)
-                model.fit(X_tr, y_tr)
+                X_tr_proc, X_v_proc, _ = apply_transforms(X_tr, X_v)
 
-                preds = model.predict_proba(X_v)
+                model = XGBClassifier(**param)
+                model.fit(X_tr_proc, y_tr)
+
+                preds = model.predict_proba(X_v_proc)
                 loss = log_loss(y_v, preds)
                 cv_scores.append(loss)
 
             return np.mean(cv_scores)
 
-    # Chạy Optuna
+    # Run Optuna
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     study = optuna.create_study(direction='minimize')
     study.optimize(objective, n_trials=n_trials, show_progress_bar=True)
 
     best_params = study.best_params
-    print(f"-> Tham số tốt nhất từ Optuna: {best_params}")
+    print(f"-> Best parameters from Optuna: {best_params}")
 
-    # Vẽ biểu đồ tối ưu
+    # Plot
     plot_optuna_results(study, reports_dir)
 
-    # Huấn luyện mô hình cuối cùng
-    print("\nHuấn luyện final model với bộ tham số tốt nhất...")
-    if X_val is not None:
-        X_final = pd.concat([X_train, X_val])
+    # Train final model
+    print("\n Training final model with best params...")
+    if validation == "holdout" and X_val is not None:
+        X_final_raw = pd.concat([X_train, X_val])
         y_final = pd.concat([y_train, y_val])
     else:
-        X_final, y_final = X_train, y_train
+        X_final_raw, y_final = X_train, y_train
 
-    final_clf = XGBClassifier(**best_params, enable_categorical=True, tree_method='hist', eval_metric='logloss',
+    X_final_proc, _, final_scaler = apply_transforms(X_final_raw, None)
+
+    final_clf = XGBClassifier(**best_params,
+                              tree_method='hist', eval_metric='logloss',
                               random_state=42)
-    final_clf.fit(X_final, y_final)
+    final_clf.fit(X_final_proc, y_final)
 
-    dummy_scaler = FunctionTransformer(func=None)
-    dummy_scaler.fit(X_final)
-
-    # Lưu kết quả
     joblib.dump(final_clf, model_path)
-    joblib.dump(dummy_scaler, scaler_path)
+    joblib.dump(final_scaler, scaler_path)
 
     config = {
         "model_type": "XGBoost_Optuna",
@@ -140,4 +149,4 @@ def run_xgboost_optuna_pipeline(X_train, y_train, X_val, y_val, output_dir, repo
     with open(output_dir / "xgboost_config.json", "w") as f:
         json.dump(config, f, indent=4)
 
-    return final_clf, dummy_scaler
+    return final_clf, final_scaler
