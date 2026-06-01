@@ -1,0 +1,18 @@
+{
+    "model_type": "XGBoost_GridSearch",
+    "best_params": {
+        "colsample_bytree": 0.8,
+        "learning_rate": 0.01,
+        "max_depth": 7,
+        "n_estimators": 800,
+        "subsample": 0.8
+    },
+    "bias_metrics": {
+        "class_1_prediction_rate": 50.21,
+        "elo_reliance": 86.83,
+        "elo_baseline_accuracy": 64.09,
+        "upset_prediction_accuracy": 21.39,
+        "rank_reliance": 83.44,
+        "final_accuracy": 66.29
+    }
+}
