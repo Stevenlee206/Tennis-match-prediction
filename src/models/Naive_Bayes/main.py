@@ -1,6 +1,6 @@
 import pandas as pd
 from src.model.Logistic_Regression.trainer import time_series_cv
-from src.model.Naive_Bayes.naive_bayes_model import build_naive_bayes_model
+from models.Naive_Bayes.naive_bayes_model import build_naive_bayes_model
 def run_naive_bayes():
     print("Loading data")
     df = pd.read_csv('data/processed/final_ml_matrix.csv')
