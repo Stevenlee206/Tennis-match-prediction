@@ -152,12 +152,27 @@ def run_benchmark():
                 
             # 1. Tune Hyperparameters using Time-Series CV
             n_trials = 20
-            max_epochs = 150 if model_type == "pcn" else 50
-            best_params = tune_hyperparameters_tscv(
-                model_type, input_dim, X_train_pool, y_train_pool, 
-                n_splits=5, n_trials=n_trials, epochs=max_epochs, patience=5,
-                base_weights_path=base_weights
-            )
+            max_epochs = 50
+            if model_type == "pcn":
+                print(f"--- Bypassing Optuna for PCN, using pre-defined config ---")
+                best_params = {
+                    "lr": 0.022768949783530976,
+                    "inference_lr": 0.008551624390895062,
+                    "inference_steps": 44,
+                    "hidden_activation": "tanh",
+                    "optimal_epochs": 100 # flexible to allow convergence
+                }
+                
+                # Halve the learning rate for finetune mode
+                if mode == "finetune":
+                    best_params["lr"] *= 0.5
+                    print(f"Fine-tune mode: Reduced PCN learning rate to {best_params['lr']}")
+            else:
+                best_params = tune_hyperparameters_tscv(
+                    model_type, input_dim, X_train_pool, y_train_pool, 
+                    n_splits=5, n_trials=n_trials, epochs=max_epochs, patience=5,
+                    base_weights_path=base_weights
+                )
             
             # Save params
             with open(os.path.join(mode_dir, 'best_params.json'), 'w') as f:

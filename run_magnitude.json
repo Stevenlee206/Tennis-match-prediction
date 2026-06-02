@@ -1,0 +1,8 @@
+{
+    "model": "predictive_coding",
+    "validation": "walk_forward",
+    "optimizer": "optuna",
+    "n_trials": 20,
+    "weight_strategy": "magnitude",
+    "upset_weight": 2.5
+}

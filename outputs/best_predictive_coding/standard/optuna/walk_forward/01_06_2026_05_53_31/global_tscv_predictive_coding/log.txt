@@ -1,0 +1,55 @@
+Predictive Coding Final Training Log
+Hyperparameters: epochs=50, batch_size=64, lr=0.0684
+================================================================================
+Epoch 001/50 | Train Energy: 0.1099 | Train Loss (BCE): 0.6172 | Train Acc: 0.6535
+Epoch 002/50 | Train Energy: 0.1051 | Train Loss (BCE): 0.6127 | Train Acc: 0.6583
+Epoch 003/50 | Train Energy: 0.1045 | Train Loss (BCE): 0.6107 | Train Acc: 0.6589
+Epoch 004/50 | Train Energy: 0.1041 | Train Loss (BCE): 0.6093 | Train Acc: 0.6607
+Epoch 005/50 | Train Energy: 0.1038 | Train Loss (BCE): 0.6081 | Train Acc: 0.6613
+Epoch 006/50 | Train Energy: 0.1035 | Train Loss (BCE): 0.6075 | Train Acc: 0.6616
+Epoch 007/50 | Train Energy: 0.1032 | Train Loss (BCE): 0.6072 | Train Acc: 0.6623
+Epoch 008/50 | Train Energy: 0.1030 | Train Loss (BCE): 0.6062 | Train Acc: 0.6632
+Epoch 009/50 | Train Energy: 0.1029 | Train Loss (BCE): 0.6060 | Train Acc: 0.6622
+Epoch 010/50 | Train Energy: 0.1027 | Train Loss (BCE): 0.6056 | Train Acc: 0.6639
+Epoch 011/50 | Train Energy: 0.1025 | Train Loss (BCE): 0.6051 | Train Acc: 0.6633
+Epoch 012/50 | Train Energy: 0.1022 | Train Loss (BCE): 0.6056 | Train Acc: 0.6637
+Epoch 013/50 | Train Energy: 0.1021 | Train Loss (BCE): 0.6045 | Train Acc: 0.6653
+Epoch 014/50 | Train Energy: 0.1019 | Train Loss (BCE): 0.6043 | Train Acc: 0.6655
+Epoch 015/50 | Train Energy: 0.1017 | Train Loss (BCE): 0.6043 | Train Acc: 0.6648
+Epoch 016/50 | Train Energy: 0.1015 | Train Loss (BCE): 0.6039 | Train Acc: 0.6660
+Epoch 017/50 | Train Energy: 0.1013 | Train Loss (BCE): 0.6037 | Train Acc: 0.6671
+Epoch 018/50 | Train Energy: 0.1011 | Train Loss (BCE): 0.6036 | Train Acc: 0.6661
+Epoch 019/50 | Train Energy: 0.1008 | Train Loss (BCE): 0.6045 | Train Acc: 0.6675
+Epoch 020/50 | Train Energy: 0.1006 | Train Loss (BCE): 0.6032 | Train Acc: 0.6680
+Epoch 021/50 | Train Energy: 0.1004 | Train Loss (BCE): 0.6032 | Train Acc: 0.6685
+Epoch 022/50 | Train Energy: 0.1001 | Train Loss (BCE): 0.6031 | Train Acc: 0.6689
+Epoch 023/50 | Train Energy: 0.0999 | Train Loss (BCE): 0.6028 | Train Acc: 0.6685
+Epoch 024/50 | Train Energy: 0.0996 | Train Loss (BCE): 0.6028 | Train Acc: 0.6690
+Epoch 025/50 | Train Energy: 0.0993 | Train Loss (BCE): 0.6027 | Train Acc: 0.6690
+Epoch 026/50 | Train Energy: 0.0990 | Train Loss (BCE): 0.6030 | Train Acc: 0.6687
+Epoch 027/50 | Train Energy: 0.0988 | Train Loss (BCE): 0.6024 | Train Acc: 0.6691
+Epoch 028/50 | Train Energy: 0.0984 | Train Loss (BCE): 0.6023 | Train Acc: 0.6701
+Epoch 029/50 | Train Energy: 0.0981 | Train Loss (BCE): 0.6022 | Train Acc: 0.6695
+Epoch 030/50 | Train Energy: 0.0977 | Train Loss (BCE): 0.6022 | Train Acc: 0.6707
+Epoch 031/50 | Train Energy: 0.0974 | Train Loss (BCE): 0.6024 | Train Acc: 0.6702
+Epoch 032/50 | Train Energy: 0.0970 | Train Loss (BCE): 0.6020 | Train Acc: 0.6713
+Epoch 033/50 | Train Energy: 0.0966 | Train Loss (BCE): 0.6020 | Train Acc: 0.6704
+Epoch 034/50 | Train Energy: 0.0962 | Train Loss (BCE): 0.6019 | Train Acc: 0.6706
+Epoch 035/50 | Train Energy: 0.0958 | Train Loss (BCE): 0.6020 | Train Acc: 0.6706
+Epoch 036/50 | Train Energy: 0.0953 | Train Loss (BCE): 0.6025 | Train Acc: 0.6696
+Epoch 037/50 | Train Energy: 0.0949 | Train Loss (BCE): 0.6019 | Train Acc: 0.6717
+Epoch 038/50 | Train Energy: 0.0944 | Train Loss (BCE): 0.6020 | Train Acc: 0.6706
+Epoch 039/50 | Train Energy: 0.0939 | Train Loss (BCE): 0.6016 | Train Acc: 0.6718
+Epoch 040/50 | Train Energy: 0.0934 | Train Loss (BCE): 0.6028 | Train Acc: 0.6711
+Epoch 041/50 | Train Energy: 0.0928 | Train Loss (BCE): 0.6016 | Train Acc: 0.6715
+Epoch 042/50 | Train Energy: 0.0922 | Train Loss (BCE): 0.6016 | Train Acc: 0.6725
+Epoch 043/50 | Train Energy: 0.0916 | Train Loss (BCE): 0.6033 | Train Acc: 0.6709
+Epoch 044/50 | Train Energy: 0.0910 | Train Loss (BCE): 0.6017 | Train Acc: 0.6717
+Epoch 045/50 | Train Energy: 0.0904 | Train Loss (BCE): 0.6018 | Train Acc: 0.6718
+Epoch 046/50 | Train Energy: 0.0896 | Train Loss (BCE): 0.6020 | Train Acc: 0.6722
+Epoch 047/50 | Train Energy: 0.0890 | Train Loss (BCE): 0.6021 | Train Acc: 0.6721
+Epoch 048/50 | Train Energy: 0.0882 | Train Loss (BCE): 0.6020 | Train Acc: 0.6722
+Epoch 049/50 | Train Energy: 0.0874 | Train Loss (BCE): 0.6021 | Train Acc: 0.6731
+Epoch 050/50 | Train Energy: 0.0867 | Train Loss (BCE): 0.6023 | Train Acc: 0.6727
+================================================================================
+Best Train Acc: 0.6731 at epoch 49

@@ -155,7 +155,7 @@ def tune_hyperparameters_tscv(model_type, input_dim, X, y, n_splits=5, n_trials=
                 cfg.learning_rate = lr
                 cfg.inference_lr = inf_lr
                 cfg.inference_steps = inf_steps
-                cfg.output_activation = "sigmoid"
+                cfg.output_activation = "identity"
                 model = PredictiveCodingNetworkTorch(layer_sizes=[input_dim, 64, 32, 1], cfg=cfg, device=device)
                 wrapper = model
                 if base_weights_path and os.path.exists(base_weights_path):
@@ -238,7 +238,7 @@ def train_model_full(model_type, input_dim, X: np.ndarray, y: np.ndarray, best_p
         cfg.learning_rate = best_params.get("lr", 0.001)
         cfg.inference_lr = best_params.get("inference_lr", 0.05)
         cfg.inference_steps = best_params.get("inference_steps", 20)
-        cfg.output_activation = "sigmoid"
+        cfg.output_activation = "identity"
         pcn_model = PredictiveCodingNetworkTorch(layer_sizes=[input_dim, 64, 32, 1], cfg=cfg, device=device)
         wrapper = pcn_model
         

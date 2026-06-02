@@ -1,0 +1,7 @@
+{
+    "lr": 0.011384474891765488,
+    "inference_lr": 0.008551624390895062,
+    "inference_steps": 44,
+    "hidden_activation": "tanh",
+    "optimal_epochs": 100
+}

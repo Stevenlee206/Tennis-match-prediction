@@ -252,7 +252,7 @@ def main():
     # ==========================================
     # ROUTE A: STANDARD HOLDOUT VALIDATION
     # ==========================================
-    if args.validation == "holdout" and not args.eval_only:
+    if args.validation == "holdout":
         X_train, X_val, y_train, y_val = train_test_split(
             X_train_val_pool, y_train_val_pool, test_size=0.2, shuffle=False
         )
@@ -351,9 +351,9 @@ def main():
         else:
             model_name, scaler_name, config_name = f"{args.rf_variant}_model.joblib", f"{args.rf_variant}_scaler.joblib", f"{args.rf_variant}_config.json"
             
-        model_path = BASE_OUT / model_name
-        scaler_path = BASE_OUT / scaler_name
-        config_path = BASE_OUT / config_name
+        model_path = Path(args.weights_dir) / model_name if args.weights_dir else BASE_OUT / model_name
+        scaler_path = Path(args.weights_dir) / scaler_name if args.weights_dir else BASE_OUT / scaler_name
+        config_path = Path(args.weights_dir) / config_name if args.weights_dir else BASE_OUT / config_name
         
         check_path = Path(str(model_path)) if args.model != "tabnet" else Path(str(model_path).replace('.zip', '') + '.zip')
 
@@ -417,7 +417,7 @@ def main():
                     cfg = json.load(f)
                 
                 pc_cfg = PCNetworkConfig(**cfg.get('best_params', {}))
-                pc_cfg.output_activation = "sigmoid"
+                pc_cfg.output_activation = "identity"
                 
                 # layer sizes include in and out
                 layer_sizes = [X_val_scaled.shape[1], *cfg['model_params']['hidden_sizes'], 1]
@@ -442,7 +442,7 @@ def main():
     # ==========================================
     # ROUTE B: WALK-FORWARD VALIDATION (Global TSCV)
     # ==========================================
-    elif args.validation == "walk_forward" and not args.eval_only:
+    elif args.validation == "walk_forward":
         print("\n" + "="*50)
         print(" RUNNING GLOBAL TIME-SERIES CROSS VALIDATION")
         print("="*50)
@@ -522,7 +522,7 @@ def main():
                     cfg = json.load(f)
                 
                 pc_cfg = PCNetworkConfig(**cfg.get('best_params', {}))
-                pc_cfg.output_activation = "sigmoid"
+                pc_cfg.output_activation = "identity"
                 layer_sizes = [X_test_scaled.shape[1], *cfg['model_params']['hidden_sizes'], 1]
                 device = "cuda" if torch.cuda.is_available() else "cpu"
                 best_model = PredictiveCodingNetworkTorch(layer_sizes=layer_sizes, cfg=pc_cfg, device=device)
@@ -621,7 +621,7 @@ def main():
                     cfg = json.load(f)
                 
                 pc_cfg = PCNetworkConfig(**cfg.get('best_params', {}))
-                pc_cfg.output_activation = "sigmoid"
+                pc_cfg.output_activation = "identity"
                 
                 # layer sizes include in and out
                 layer_sizes = [X_val_scaled.shape[1], *cfg['model_params']['hidden_sizes'], 1]
