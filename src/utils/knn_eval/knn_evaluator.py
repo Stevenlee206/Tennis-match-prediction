@@ -8,7 +8,9 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 class KNNEvaluator:
     @staticmethod
     def compare_performances(y_true_full, y_pred_sklearn_full, y_true_sub, y_pred_scratch_sub, y_pred_sklearn_sub):
-        """In báo cáo so sánh hiệu suất giữa Sklearn (toàn bộ & subset) và Scratch (subset)."""
+        """
+        This report compares the performance of Sklearn (entire app and subsets) and Scratch (subsets).
+        """
         acc_sklearn_full = accuracy_score(y_true_full, y_pred_sklearn_full)
         acc_sklearn_sub = accuracy_score(y_true_sub, y_pred_sklearn_sub)
         acc_scratch_sub = accuracy_score(y_true_sub, y_pred_scratch_sub)
