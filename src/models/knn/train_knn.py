@@ -1,7 +1,7 @@
 import sys
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 sys.stdout.reconfigure(encoding='utf-8')
 
 import time
@@ -9,7 +9,7 @@ import numpy as np
 from sklearn.neighbors import KNeighborsClassifier
 from src.preprocessing.preprocessing import Preprocessing
 from utils.dataset import prepare_loaders
-from src.models.knn_scratch import KNNFromScratch
+from models.knn.knn_scratch import KNNFromScratch
 from src.utils.knn_evaluator import KNNEvaluator
 
 # --- CẤU HÌNH ---
@@ -30,7 +30,7 @@ def train_knn():
 
     # Định nghĩa thư mục kết quả tuyệt đối để luôn lưu đúng thư mục dự án
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.abspath(os.path.join(script_dir, '..'))
+    project_root = os.path.abspath(os.path.join(script_dir, '../../..'))
     result_dir = os.path.join(project_root, 'result')
 
     # 1. Load và tiền xử lý dữ liệu
