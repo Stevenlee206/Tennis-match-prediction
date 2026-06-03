@@ -6,7 +6,7 @@ from src.execution.bias_analysis import evaluate_model_bias, append_metrics_to_c
 from src.execution.model_interpretation import calculate_feature_importances, plot_interpretability
 
 def _get_file_names(args):
-    """Xác định tên file model, scaler và config dựa trên thuật toán."""
+    """Determine the model, scaler, and configuration file names based on the algorithm.."""
     if args.model == "svm":
         if args.mode == "sgd":
             return "svm_sgd_model.joblib", "svm_sgd_scaler.joblib", "svm_sgd_config.json"
@@ -15,20 +15,21 @@ def _get_file_names(args):
     elif args.model == "pytorch_svm":
         return "svm_pytorch_model.pth", "svm_pytorch_scaler.joblib", "svm_pytorch_config.json"
 
-    elif args.model == "pytorch_mlp":
-        return "mlp_pytorch_model.pth", "mlp_pytorch_scaler.joblib", "mlp_pytorch_config.json"
-
     elif args.model == "deepforest":
         return "deepforest_model.joblib", "deepforest_scaler.joblib", "deepforest_config.json"
 
-    elif args.model == "tabnet":
-        return "tabnet_model.zip", "tabnet_scaler.joblib", "tabnet_config.json"
-
     elif args.model == "xgboost":
         return "xgboost_model.joblib", "xgboost_scaler.joblib", "xgboost_config.json"
+
     elif args.model == "decisiontree":
         return "decisiontree_model.joblib", "decisiontree_scaler.joblib", "decisiontree_config.json"
 
+    elif args.model == "logistic_regression":
+        return "log_reg_model.joblib","log_reg_scaler.joblib","log_reg_config.json"
+
+    elif args.model == "naive_bayes":
+
+        return "nb_model.joblib", "nb_scaler.joblib", "nb_config.json"
     else:  # Random Forest variants
         return f"{args.rf_variant}_model.joblib", f"{args.rf_variant}_scaler.joblib", f"{args.rf_variant}_config.json"
 
@@ -62,7 +63,7 @@ def load_and_evaluate_model(args, X_eval, y_eval, out_dir):
     check_model_path = Path(str(model_path).replace('.zip', '') + '.zip') if args.model == "tabnet" else model_path
 
     if not (check_model_path.exists() and scaler_path.exists()):
-        print(f"⚠️ Lỗi: Không tìm thấy model hoặc scaler tại {out_dir}. Bỏ qua đánh giá.")
+        print(f"Lỗi: Không tìm thấy model hoặc scaler tại {out_dir}. Bỏ qua đánh giá.")
         return
 
     # Sao chép dữ liệu gốc để giữ lại làm bằng chứng tính Bias
@@ -80,7 +81,7 @@ def load_and_evaluate_model(args, X_eval, y_eval, out_dir):
             pca = joblib.load(pca_path)
             X_eval_scaled = pca.transform(X_eval_scaled)
         else:
-            print(f"⚠️ Cảnh báo: Đã bật PCA nhưng không tìm thấy {pca_path.name}")
+            print(f"Warning: PCA is enabled but not found {pca_path.name}")
 
     # 3.1 Load KMeans & Transform
     if getattr(args, 'add_kmeans', False):
@@ -90,7 +91,7 @@ def load_and_evaluate_model(args, X_eval, y_eval, out_dir):
             v_distances = kmeans.transform(X_eval_scaled)
             X_eval_scaled = np.hstack((X_eval_scaled, v_distances))
         else:
-            print(f"⚠️ Cảnh báo: Đã bật KMeans nhưng không tìm thấy {kmeans_path.name}")
+            print(f" Warning: KMeans is enabled but not found {kmeans_path.name}")
 
     # 4. Phân luồng Load Model & Predict
     y_pred = []
@@ -109,38 +110,6 @@ def load_and_evaluate_model(args, X_eval, y_eval, out_dir):
             tensor_X = torch.FloatTensor(X_eval_scaled).to(device)
             preds_raw = model(tensor_X)
             y_pred = (preds_raw > 0).cpu().numpy().astype(int)
-
-    elif args.model == "pytorch_mlp":
-        import torch
-        from torch.utils.data import DataLoader
-        from src.models.mlp.mlp_pytorch_optuna import TimeSeriesTennisNet, TimeSeriesTennisDataset
-
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-
-        # Đọc số chiều ẩn từ file config
-        with open(config_path, 'r') as f:
-            cfg = json.load(f)
-
-        model = TimeSeriesTennisNet(X_eval_scaled.shape[1], cfg['hidden_dim']).to(device)
-        model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
-        model.eval()
-
-        # MLP Time-series bắt buộc dùng Dataset để tạo cửa sổ thời gian (window)
-        dataset = TimeSeriesTennisDataset(X_eval_scaled, y_eval.values, window_size=5)
-        loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False)
-
-        preds_list = []
-        with torch.no_grad():
-            for batch_X, _, _ in loader:
-                preds_raw = model(batch_X.to(device))
-                preds_binary = (torch.sigmoid(preds_raw) > 0.5).cpu().numpy().astype(int).flatten()
-                preds_list.extend(preds_binary)
-
-        y_pred = np.array(preds_list)
-
-        # CẮT DỮ LIỆU: Vì window_size=5, 4 trận đầu tiên bị bỏ qua. Phải cắt y_eval và X_eval_raw cho khớp số lượng
-        y_eval = y_eval.iloc[4:]
-        X_eval_raw = X_eval_raw.iloc[4:]
 
     else:
         # Load các model hệ Sklearn / TabNet / DeepForest
@@ -211,7 +180,7 @@ def load_and_evaluate_model(args, X_eval, y_eval, out_dir):
             y_prob = model.predict_proba(X_eval_scaled)[:, 1]
             plot_confidence_analysis(y_eval.values, y_prob, out_dir, args.model)
         except Exception as e:
-            print(f"⚠️ Không thể vẽ biểu đồ Confidence: {str(e)}")
+            print(f"Không thể vẽ biểu đồ Confidence: {str(e)}")
     else:
         print(f"-> Bỏ qua biểu đồ Confidence do {args.model} không hỗ trợ predict_proba.")
 
