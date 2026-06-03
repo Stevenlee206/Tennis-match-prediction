@@ -15,7 +15,7 @@ def parse_arguments():
     model_group = parser.add_argument_group("Core Model & Feature Engineering")
     model_group.add_argument("--model", type=str,
                              choices=["svm", "rf", "pytorch_svm", "tabnet", "deepforest",
-                                      "pytorch_mlp","xgboost","decisiontree","adaboost"],
+                                      "xgboost","decisiontree","adaboost","logistic_regression","naive_bayes"],
                              default="svm",help="Algorithm to use")
 
     model_group.add_argument("--add_kmeans", action="store_true",
@@ -138,6 +138,22 @@ def parse_arguments():
                            default=[1, 10, 30])
     opt_group.add_argument("--dt_grid_criterion", type=str, nargs='+',
                            default=['gini', 'entropy'])
+
+    # logistic regression
+    opt_group.add_argument("--log_reg_C", type=float, nargs='+', default=[0.01, 0.1, 1.0, 10.0],
+                        help=" C grid (Regularization) for Logistic Regression")
+    opt_group.add_argument("--log_reg_solver", type=str, nargs='+', default=['lbfgs', 'liblinear'],
+                        help="solver for Logistic Regression")
+    opt_group.add_argument("--log_reg_max_iter", type=int, nargs='+', default=[1000, 2000],
+                        help="max_iter for Logistic Regression")
+
+    # naive bayes
+
+    opt_group.add_argument("--var_smoothing", type=float, nargs='+',
+                          default=[1e-9, 1e-7, 1e-5, 1e-3, 1e-1],
+                          help="var_smoothing for Naive Bayes")
+
+
 
 
     args = parser.parse_args()

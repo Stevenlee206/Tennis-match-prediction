@@ -39,7 +39,14 @@ DISPATCH_TABLE = {
         'optuna': ('src.models.decisiontree.decision_tree_optuna_pipeline', 'run_decision_tree_optuna_pipeline'),
         'grid':   ('src.models.decisiontree.decision_tree_grid_pipeline', 'run_decision_tree_grid_pipeline'),
         'pso':    ('src.models.decisiontree.decision_tree_pso_pipeline', 'run_decision_tree_pso_pipeline')
+    },
+    'logistic_regression':{
+        'grid': ('src.models.logistic_reg.log_reg_pipeline', 'run_log_reg_pipeline'),
+    },
+    'naive_bayes':{
+        'grid': ('src.models.Naive_Bayes.naive_bayes_pipeline', 'run_nb_grid_pipeline')
     }
+
 }
 
 

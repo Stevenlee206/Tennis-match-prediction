@@ -4,13 +4,14 @@ from src.execution.get_pipeline_runner import get_pipeline_runner
 from pathlib import Path
 from src.execution.load_and_evaluate import load_and_evaluate_model
 import inspect
+from sklearn.model_selection import train_test_split
+
 
 def split_holdout(X_train_val, y_train_val, args):
     """
     Chia tiếp tập Modeling Pool thành Train và Validation riêng cho chiến lược Holdout.
     Đồng thời xử lý xóa bỏ dữ liệu tăng cường (augmented) khỏi tập Validation.
     """
-    from sklearn.model_selection import train_test_split
 
     X_train, X_val, y_train, y_val = train_test_split(
         X_train_val, y_train_val, test_size=args.val_size, shuffle=False
@@ -41,6 +42,10 @@ def get_output_directories(args):
         model_subpath = "xgboost"
     elif args.model == 'decisiontree':
         model_subpath = 'decisiontree'
+    elif args.model == 'logistic_regression':
+        model_subpath = 'logistic_regression'
+    elif args.model == 'naive_bayes':
+        model_subpath = 'nb'
 
     out_dir = BASE_DIR / "outputs" / model_subpath / args.mode / args.optimizer / args.validation
     rep_dir = BASE_DIR / "reports" / "figures" / model_subpath / args.mode / args.optimizer / args.validation
