@@ -13,9 +13,7 @@ from sklearn.cluster import KMeans
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import accuracy_score
 
-# ==========================================
 # Weight Generation
-# ==========================================
 def generate_sample_weights(X_raw, y_raw, strategy="none", base_weight=1.0):
     n_samples = len(y_raw)
     weights = np.ones(n_samples)
@@ -42,9 +40,7 @@ def generate_sample_weights(X_raw, y_raw, strategy="none", base_weight=1.0):
 
     return weights
 
-# ==========================================
 # Optimization Objective
-# ==========================================
 def objective(trial, X_train, y_train, X_val, y_val, c_min=1e-3, c_max=1e2, add_pca=False, add_kmeans=False, n_clusters=5, validation="holdout", weight_strategy="none", upset_weight=1.0, lr_schedule="adaptive", n_splits=5, tscv_test_size=None):
     c_param = trial.suggest_float("C", c_min, c_max, log=True)
     alpha_param = 1.0 / c_param 
@@ -97,7 +93,6 @@ def objective(trial, X_train, y_train, X_val, y_val, c_min=1e-3, c_max=1e2, add_
         return accuracy_score(y_val, val_preds)
 
     elif validation == "walk_forward":
-        # ---> UPDATED HERE <---
         tscv = TimeSeriesSplit(n_splits=n_splits, test_size=tscv_test_size)
         fold_accuracies = []
         
@@ -131,9 +126,7 @@ def objective(trial, X_train, y_train, X_val, y_val, c_min=1e-3, c_max=1e2, add_
             
         return np.mean(fold_accuracies)
 
-# ==========================================
 # Plotting Utilities
-# ==========================================
 def plot_optuna_history(study, save_path):
     plt.figure(figsize=(10, 6))
     trials = study.trials_dataframe()
@@ -162,9 +155,7 @@ def plot_feature_importance(clf, feature_names, save_path):
     plt.close()
 
 
-# ==========================================
 # Main Execution Pipeline
-# ==========================================
 def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_trials=30, n_epochs=100, kernel="linear", c_min=1e-3, c_max=1e2, add_pca=False, add_kmeans=False, n_clusters=5, validation="holdout", weight_strategy="none", upset_weight=1.0, lr_schedule="adaptive", n_splits=5, tscv_test_size=None):
     if kernel != "linear":
         raise ValueError("SGDClassifier requires a linear kernel. Terminating.")    
@@ -267,7 +258,7 @@ def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_
     print(f"Optuna Val Accuracy:   {study.best_value * 100:.2f}%")
     
     if (train_acc - study.best_value) > 0.10:
-        print("⚠️ WARNING: High likelihood of overfitting. The model is memorizing the training data.")
+        print("Warning: High likelihood of overfitting. The model is memorizing the training data.")
     print("-" * 30 + "\n")
 
     # Plotting

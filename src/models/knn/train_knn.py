@@ -8,11 +8,11 @@ import time
 import numpy as np
 from sklearn.neighbors import KNeighborsClassifier
 from src.preprocessing.preprocessing import Preprocessing
-from utils.dataset import prepare_loaders
+from utils.dataset.dataset import prepare_loaders
 from models.knn.knn_scratch import KNNFromScratch
-from src.utils.knn_evaluator import KNNEvaluator
+from src.utils.knn_eval.knn_evaluator import KNNEvaluator
 
-# --- CẤU HÌNH ---
+# Config
 K_FIND_RANGE = list(range(5, 100, 10))  # Thử các giá trị K lẻ từ 5 đến 45: [5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45]
 SCRATCH_SUBSET_SIZE = 100            # Kích thước tập con để kiểm thử mô hình Scratch (vì Scratch chạy chậm)
 
@@ -143,7 +143,7 @@ def train_knn():
     )
     
     # Thêm chi tiết thời gian và gợi ý Hyperparameters tuning vào báo cáo
-    time_report = """
+    time_report = ("""
 ========================================
 BÁO CÁO THỜI GIAN CHẠY (RUNTIME REPORT)
 ========================================
@@ -162,7 +162,7 @@ BÁO CÁO THỜI GIAN CHẠY (RUNTIME REPORT)
         time_scratch_sub=time_scratch_sub,
         speedup=time_scratch_sub / max(time_sklearn_sub, 1e-6),
         est_scratch=estimated_scratch_full_time
-    )
+    ))
     
     tuning_suggestions = """
 ========================================
