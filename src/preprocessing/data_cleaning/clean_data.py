@@ -17,19 +17,19 @@ def drop_high_missing_columns(df: pd.DataFrame, train_idx: int, threshold: float
 def fill_missing_values(df: pd.DataFrame, train_idx: int) -> pd.DataFrame:
     data = df.copy()
     train_slice = data.iloc[:train_idx] # The isolated train data
-    
+
     for col in ['winner_rank', 'loser_rank', 'winner_ht', 'loser_ht']:
         data[f'{col}_missing'] = data[col].isna().astype(int)
-        
+
     for col in ['winner_rank', 'loser_rank', 'winner_rank_points', 'loser_rank_points']:
-        # FIT 
+        # FIT
         surf_meds = train_slice.groupby('surface')[col].median()
         glob_med = train_slice[col].median()
         # TRANSFORM
         data[col] = data.apply(
             lambda row: surf_meds.get(row['surface'], glob_med) if pd.isna(row[col]) else row[col], axis=1
         )
-        
+
     for col in ['winner_ht', 'loser_ht']:
         ioc_col = col.replace('_ht', '_ioc')
         # FIT
@@ -38,11 +38,11 @@ def fill_missing_values(df: pd.DataFrame, train_idx: int) -> pd.DataFrame:
         # TRANSFORM
         data[col] = data.apply(
             lambda row: ioc_meds.get(row.get(ioc_col, 'Unknown'), glob_med) if pd.isna(row[col]) else row[col], axis=1
-        )  
+        )
     # Age is median by default
     for col in ['winner_age', 'loser_age']:
         data[col] = data[col].fillna(train_slice[col].median())
-        
+
     data['surface'] = data['surface'].fillna('Unknown')
     # Hand is Right by default
     data['winner_hand'] = data['winner_hand'].fillna('R')
