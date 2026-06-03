@@ -2,15 +2,15 @@ YEARS = list(range(2014, 2025))
 CLEAN_THRESHOLD = 0.2
 SURFACES = ['Hard', 'Clay', 'Grass']
 IMPORTANCE_COLUMNS = [
-    'target', 
-    'elo_diff', 
-    'elo_hard_diff', 
-    'rank_diff', 
-    'rank_points_diff', 
-    'elo_clay_diff', 
-    'elo_grass_diff', 
-    'age_diff', 
-    'height_diff', 
+    'target',
+    'elo_diff',
+    'elo_hard_diff',
+    'rank_diff',
+    'rank_points_diff',
+    'elo_clay_diff',
+    'elo_grass_diff',
+    'age_diff',
+    'height_diff',
     # New encoded columns
     'surface_Hard',
     'surface_Clay',

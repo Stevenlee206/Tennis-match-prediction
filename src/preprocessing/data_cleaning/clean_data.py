@@ -11,6 +11,11 @@ def drop_high_missing_columns(df: pd.DataFrame, train_idx: int, threshold: float
     missing_ratio = data.iloc[:train_idx].isnull().mean()
     # TRANSFORM
     cols_to_drop = missing_ratio[missing_ratio > threshold].index.tolist()
+    
+    # Protect columns that are essential for future feature generation
+    protected_cols = ['minutes', 'w_bpSaved', 'w_bpFaced', 'l_bpSaved', 'l_bpFaced']
+    cols_to_drop = [c for c in cols_to_drop if c not in protected_cols]
+    
     data = data.drop(columns=cols_to_drop)
     return data
 
