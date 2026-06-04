@@ -5,8 +5,8 @@ from typing import Dict, Tuple
 
 import numpy as np
 
-from src.model.util.dataset import DatasetConfig, make_numpy_dataset
-from src.model.util.metrics import binary_classification_metrics
+from src.models.pc.utils.dataset import DatasetConfig, make_numpy_dataset
+from src.models.pc.utils.metrics import binary_classification_metrics
 from .pc_network import PCNetworkConfig, PredictiveCodingNetwork
 
 

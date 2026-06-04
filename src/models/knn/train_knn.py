@@ -8,9 +8,9 @@ import time
 import numpy as np
 from sklearn.neighbors import KNeighborsClassifier
 from src.preprocessing.preprocessing import Preprocessing
-from utils.dataset.dataset import prepare_loaders
+from src.models.mlp_pytorch.utils.dataset.dataset import prepare_loaders
 from models.knn.knn_scratch import KNNFromScratch
-from src.utils.knn_eval.knn_evaluator import KNNEvaluator
+from src.models.knn.knn_evaluator import KNNEvaluator
 
 # Config
 K_FIND_RANGE = list(range(5, 100, 10))  # Thử các giá trị K lẻ từ 5 đến 45: [5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45]

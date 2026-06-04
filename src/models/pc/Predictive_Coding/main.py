@@ -8,9 +8,9 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 if str(_PROJECT_ROOT) not in sys.path:
 	sys.path.insert(0, str(_PROJECT_ROOT))
-from src.model.util.dataset import DatasetConfig
-from src.model.Predictive_Coding.pc_network import PCNetworkConfig
-from src.model.Predictive_Coding.trainer import PCTrainer, TrainerConfig
+from src.models.pc.utils.dataset import DatasetConfig
+from src.models.pc.Predictive_Coding.pc_network import PCNetworkConfig
+from src.models.pc.Predictive_Coding.trainer import PCTrainer, TrainerConfig
 
 def main() -> None:
 	### Config ###

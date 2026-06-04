@@ -10,7 +10,7 @@ try:
 except Exception as e:  # pragma: no cover
     torch = None  # type: ignore
 
-from src.model.Predictive_Coding.pc_network import PCNetworkConfig
+from src.models.pc.Predictive_Coding.pc_network import PCNetworkConfig
 
 
 def _get_activation_torch(name: str):

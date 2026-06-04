@@ -5,7 +5,7 @@ from typing import Callable, Tuple
 
 import numpy as np
 
-from src.model.util.activations import get_activation
+from src.models.pc.utils.activations import get_activation
 
 Activation = Callable[[np.ndarray], np.ndarray]
 

@@ -5,7 +5,7 @@ from typing import List, Sequence, Tuple
 
 import numpy as np
 
-from src.model.Predictive_Coding.pc_layer import PCLayer
+from src.models.pc.Predictive_Coding.pc_layer import PCLayer
 
 
 @dataclass
