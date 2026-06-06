@@ -36,7 +36,7 @@ def plot_optuna_results(study, reports_dir):
     save_path = reports_dir / "dt_optuna_tuning_history.png"
     plt.savefig(save_path, dpi=300)
     plt.close()
-    print(f"[*] Đã lưu biểu đồ Lịch sử Optuna tại: {save_path.name}")
+    print(f"[*] The Optuna History chart has been saved at: {save_path.name}")
 
 
 def run_decision_tree_optuna_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, n_trials=30, **kwargs):
@@ -49,10 +49,10 @@ def run_decision_tree_optuna_pipeline(X_train, y_train, X_val, y_val, output_dir
 
     force_retrain = kwargs.get('force_retrain', False)
     if not force_retrain and model_path.exists() and scaler_path.exists():
-        print(f"\n[!] Tìm thấy model tại {output_dir.name}. Bỏ qua huấn luyện!")
+        print(f"\n[!] Find model at {output_dir.name}. Skip training !")
         return joblib.load(model_path), joblib.load(scaler_path)
 
-    print(f"\n--- Bắt đầu tối ưu Decision Tree bằng Optuna ({n_trials} trials) ---")
+    print(f"\n--- Start optimizing your Decision Tree with Optuna. ({n_trials} trials) ---")
 
     def objective(trial):
         param = {
@@ -87,10 +87,10 @@ def run_decision_tree_optuna_pipeline(X_train, y_train, X_val, y_val, output_dir
     study.optimize(objective, n_trials=n_trials, show_progress_bar=True)
 
     best_params = study.best_params
-    print(f"-> Tham số tốt nhất từ Optuna: {best_params}")
+    print(f"-> Best parameters : {best_params}")
     plot_optuna_results(study, reports_dir)
 
-    print("\nHuấn luyện final model...")
+    print("\n Train final model...")
     if X_val is not None:
         X_final, y_final = pd.concat([X_train, X_val]), pd.concat([y_train, y_val])
     else:

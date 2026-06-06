@@ -34,7 +34,8 @@ def plot_ga_results(evolved_estimator, reports_dir):
     plt.savefig(save_path, dpi=300)
     plt.close()
 
-def run_decision_tree_ga_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, population=20, generations=15, **kwargs):
+def run_decision_tree_ga_pipeline(X_train, y_train, X_val, y_val, output_dir,
+                                  reports_dir, population=20, generations=15, **kwargs):
     output_dir, reports_dir = Path(output_dir), Path(reports_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     reports_dir.mkdir(parents=True, exist_ok=True)
@@ -44,10 +45,10 @@ def run_decision_tree_ga_pipeline(X_train, y_train, X_val, y_val, output_dir, re
 
     force_retrain = kwargs.get('force_retrain', False)
     if not force_retrain and model_path.exists() and scaler_path.exists():
-        print(f"\n[!] Tìm thấy model tại {output_dir.name}. Bỏ qua huấn luyện!")
+        print(f"\n[!] Find model at {output_dir.name}. Skip training !")
         return joblib.load(model_path), joblib.load(scaler_path)
 
-    print(f"\n--- Bắt đầu tối ưu Decision Tree bằng GA (Pop: {population}, Gen: {generations}) ---")
+    print(f"\n--- Start optimizing Decision Tree with GA. (Pop: {population}, Gen: {generations}) ---")
 
     clf = DecisionTreeClassifier(random_state=42)
     param_grid = {
@@ -73,11 +74,11 @@ def run_decision_tree_ga_pipeline(X_train, y_train, X_val, y_val, output_dir, re
 
     evolved_estimator.fit(X_cv, y_cv)
     best_params = evolved_estimator.best_params_
-    print(f"-> Tham số tốt nhất từ GA: {best_params}")
+    print(f"-> Best parameters from GA: {best_params}")
 
     plot_ga_results(evolved_estimator, reports_dir)
 
-    print("\nHuấn luyện final model...")
+    print("\n Training final model...")
     X_final = pd.concat([X_train, X_val]) if X_val is not None else X_train
     y_final = pd.concat([y_train, y_val]) if X_val is not None else y_train
 

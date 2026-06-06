@@ -11,13 +11,8 @@ from deepforest import CascadeForestClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.model_selection import TimeSeriesSplit
-from sklearn.inspection import permutation_importance
 from sklearn.metrics import accuracy_score
 
-# Plotting Utilities
-np.int = int
-np.float = float  
-np.bool = bool    
 def plot_optuna_history(study, save_path):
     """
     Generates and saves a line chart visualizing the validation accuracy across
@@ -33,30 +28,6 @@ def plot_optuna_history(study, save_path):
         plt.grid(True, linestyle="--", alpha=0.7)
         plt.tight_layout()
         plt.savefig(save_path / "optuna_optimization_history_deepforest.png", dpi=300)
-    plt.close()
-
-def plot_feature_importance(model, X, y, feature_names, save_path):
-    print("Calculating permutation importance (this may take a moment)...")
-    """
-    Calculates feature importance using the permutation method and saves
-    a bar chart ranking the features by their impact on model accuracy
-    """
-    # Use permutation importance since Deep Forest doesn't expose native importances
-    result = permutation_importance(model, X, y, n_repeats=5, random_state=42, n_jobs=-1)
-    importances = result.importances_mean
-    
-    importance_df = pd.DataFrame({
-        'Feature': feature_names,
-        'Importance': importances
-    }).sort_values(by='Importance', ascending=False)
-    plt.figure(figsize=(10, 8))
-    sns.barplot(data=importance_df, x='Importance', y='Feature', palette="viridis")
-    plt.title("Deep Forest Feature Importance (Permutation)")
-    plt.xlabel("Mean Accuracy Decrease (Higher = More Important)")
-    plt.ylabel("Feature")
-    plt.grid(True, axis="x", linestyle="--", alpha=0.7)
-    plt.tight_layout()
-    plt.savefig(save_path / "deepforest_feature_importance.png", dpi=300)
     plt.close()
 
 # Weight Generation (Matched Logic)
@@ -209,10 +180,24 @@ def run_deepforest_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_
     # --- Final Training ---
     print("\nTraining final Deep Forest architecture...")
     final_clf = CascadeForestClassifier(**best_params, random_state=42, n_jobs=-1)
-    
-    final_weights = generate_sample_weights(X_train, y_train, weight_strategy, upset_weight)
-    final_clf.fit(X_train_processed, y_train.values, sample_weight=final_weights)
-    
+
+    if X_val is not None:
+        X_final = pd.concat([X_train, X_val], ignore_index=True)
+        y_final = pd.concat([y_train, y_val], ignore_index=True)
+    else:
+        X_final, y_final = X_train, y_train
+
+    # Bạn phải thực hiện lại Scaler, PCA (và KMeans) cho X_final
+    X_final_scaled = scaler.fit_transform(X_final)
+    if add_pca:
+        X_final_processed = pca.fit_transform(X_final_scaled)
+        joblib.dump(pca, output_dir / "deepforest_pca.joblib")
+    else:
+        X_final_processed = X_final_scaled
+
+    final_weights = generate_sample_weights(X_final, y_final, weight_strategy, upset_weight)
+    final_clf.fit(X_final_processed, y_final.values, sample_weight=final_weights)
+
     # OVERFITTING CHECK
     train_preds = final_clf.predict(X_train_processed)
     train_acc = accuracy_score(y_train, train_preds)
@@ -236,7 +221,6 @@ def run_deepforest_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_
     else:
         final_feature_names = list(X_train.columns)
         
-    plot_feature_importance(final_clf, X_train_processed, y_train.values, final_feature_names, reports_dir)
     # Save
     joblib.dump(final_clf, model_path)
     joblib.dump(scaler, scaler_path)

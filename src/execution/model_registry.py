@@ -50,10 +50,9 @@ DISPATCH_TABLE = {
 }
 
 
-# HÀM TRUY XUẤT THÔNG MINH
 def get_model_routing_info(model_name: str, optimizer: str, mode: str):
     """
-    Xử lý các ngoại lệ (như SGD) và trả về (module_path, function_name)
+    Handle exceptions (such as SGD) and return (module_path, function_name).
     """
     # SVM use SGD learning algorithm
     if model_name == 'svm' and optimizer == 'optuna' and mode == 'sgd':
@@ -61,7 +60,7 @@ def get_model_routing_info(model_name: str, optimizer: str, mode: str):
 
     # Check if model exist
     if model_name not in DISPATCH_TABLE:
-        raise ValueError(f"Mô hình '{model_name}' chưa được đăng ký trong hệ thống.")
+        raise ValueError(f" Model '{model_name}' not yet registered in the system.")
 
     routes = DISPATCH_TABLE[model_name]
 
@@ -69,10 +68,12 @@ def get_model_routing_info(model_name: str, optimizer: str, mode: str):
     if optimizer in routes:
         return routes[optimizer]
 
-    # Nếu optimizer không khớp, TỰ ĐỘNG lấy cấu hình đầu tiên của model đó làm fallback
-    # Điều này loại bỏ hoàn toàn việc "hardcode" key 'optuna'
+    # If the optimizer doesn't match, it AUTOMATICALLY takes
+    # the first configuration of that model as the fallback.
+
+    # This completely eliminates "hardcoding" the 'optuna' key.
     fallback_key = list(routes.keys())[0]
     print(
-        f"[*] Cảnh báo: Tự động dùng fallback '{fallback_key}' do '{optimizer}' không có trong cấu hình của {model_name}.")
+        f"[*] Warning: Automatic fallback usage '{fallback_key}' since '{optimizer}' not in the configuration of {model_name}.")
 
     return routes[fallback_key]

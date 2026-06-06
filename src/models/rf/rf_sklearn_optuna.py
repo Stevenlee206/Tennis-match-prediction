@@ -223,9 +223,7 @@ def objective(trial, X_train, y_train, X_val, y_val, n_est_min, n_est_max, depth
         params["n_jobs"] = -1
         clf = RandomForestClassifier(**params)
         
-    # ==========================================
-    # STRATEGY 1: STANDARD HOLDOUT
-    # ==========================================
+    #  HOLDOUT
     if validation == "holdout":
         scaler = StandardScaler()
         X_t_scaled = scaler.fit_transform(X_train)
@@ -256,11 +254,8 @@ def objective(trial, X_train, y_train, X_val, y_val, n_est_min, n_est_max, depth
         
     
 
-    # ==========================================
-    # STRATEGY 2: WALK-FORWARD (TSCV)
-    # ==========================================
+    # WALK-FORWARD (TSCV)
     elif validation == "walk_forward":
-        # ---> UPDATED HERE <---
         tscv = TimeSeriesSplit(n_splits=n_splits, test_size=tscv_test_size)
         fold_accuracies = []
         
@@ -312,30 +307,11 @@ def plot_optuna_history(study, save_path):
         plt.savefig(save_path / "optuna_optimization_history.png", dpi=300)
     plt.close()
 
-# (plot_feature_importance stays mostly the same)
-def plot_feature_importance(clf, feature_names, save_path, variant):
-    if variant in ["rotation_forest", "oblique"]:
-        print(f"Skipping feature importance plot (Not natively supported by {variant.upper()}).")
-        return
-
-    importances = clf.feature_importances_
-    importance_df = pd.DataFrame({
-        'Feature': feature_names,
-        'Importance': importances
-    }).sort_values(by='Importance', ascending=False)
-
-    plt.figure(figsize=(10, 8))
-    sns.barplot(data=importance_df, x='Importance', y='Feature', palette="viridis")
-    plt.title(f"{variant.upper()} Feature Importance (Gini Impurity Decrease)")
-    plt.grid(True, axis="x", linestyle="--", alpha=0.7)
-    plt.tight_layout()
-    plt.savefig(save_path / "feature_importance.png", dpi=300)
-    plt.close()
-
 # ---> ADDED add_pca ARGUMENT
 def run_rf_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, 
                     n_trials=30, n_est_min=50, n_est_max=500, depth_min=5, depth_max=50, 
-                    variant="rf", add_pca=False, add_kmeans=False, n_clusters=5, validation="holdout", weight_strategy="none", upset_weight=1.0, n_splits=3, tscv_test_size=None):
+                    variant="rf", add_pca=False, add_kmeans=False, n_clusters=5, validation="holdout",
+                    weight_strategy="none", upset_weight=1.0, n_splits=3, tscv_test_size=None,**kwargs):
     output_dir = Path(output_dir)
     reports_dir = Path(reports_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -416,65 +392,94 @@ def run_rf_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
         final_clf = WeightedRandomForestClassifier(**best_params, random_state=42, n_jobs=-1)
     else:
         final_clf = RandomForestClassifier(**best_params, random_state=42, n_jobs=-1)
-        
-    final_weights = generate_sample_weights(X_train, y_train, weight_strategy, upset_weight)
-    
-    with parallel_backend("threading"):
-        if variant == "rotation_forest":
-            final_clf.fit(X_train_processed, y_train)
-        else:
-            final_clf.fit(X_train_processed, y_train, sample_weight=final_weights)    
-    # ==========================================
-    # ---> ADDED: OVERFITTING DIAGNOSTIC <---
-    # ==========================================
-    train_preds = final_clf.predict(X_train_processed)
-    train_acc = accuracy_score(y_train, train_preds)
-    
-    print("\n" + "-"*30)
-    print(" OVERFITTING CHECK")
-    print("-"*30)
-    print(f"Training Accuracy:     {train_acc * 100:.2f}%")
-    print(f"Optuna Val Accuracy:   {study.best_value * 100:.2f}%")
-    
-    # If the model scores >10% better on the training set, it is memorizing data
-    if (train_acc - study.best_value) > 0.10:
-        print("⚠️ WARNING: High likelihood of overfitting. The model is memorizing the training data.")
-        print("💡 TIP: Try lowering --rf_depth_max or increasing min_samples_split.")
-    print("-" * 30 + "\n")  
-    joblib.dump(final_clf, model_path)
-    joblib.dump(scaler, scaler_path)
-    
-    # ---> DYNAMIC FEATURE NAMES IF PCA IS ENABLED
-    if add_pca:
-        # Subtract the KMeans columns to get the true number of Principal Components
-        n_pcs = X_train_processed.shape[1] - (n_clusters if add_kmeans else 0)
-        final_feature_names = [f"PC{i+1}" for i in range(n_pcs)]
-    else:
-        final_feature_names = list(X_train.columns)
-        
-    # Append the new Clustering features to the name list so they match the coefficients
-    if add_kmeans:
-        kmeans_names = [f"KMeans_Dist_C{i+1}" for i in range(n_clusters)]
-        final_feature_names.extend(kmeans_names)
 
-    config = {
-        "model_type": variant.upper(),
-        "optimizer": "Optuna",
-        "best_params": best_params,
-        "train_accuracy": train_acc,
-        "val_accuracy": study.best_value,
-        "pca_applied": add_pca,
-        "kmeans_applied": add_kmeans,  # <--- NEW
-        "n_clusters": n_clusters if add_kmeans else 0, # <--- NEW
-        "weight_strategy": weight_strategy,
-        "upset_weight": upset_weight,
-        "features_used": final_feature_names
-    }
-    with open(output_dir / f"{variant}_config.json", "w") as f:
-        json.dump(config, f, indent=4)
-        
-    print("Generating plots...")
-    plot_optuna_history(study, reports_dir)
-    plot_feature_importance(final_clf, final_feature_names, reports_dir, variant)
-    
-    return final_clf, scaler
+        # ==========================================
+        # FINAL TRAINING CÓ GỘP DỮ LIỆU
+        # ==========================================
+        print("\nTraining final model on combined dataset...")
+        if X_val is not None:
+            X_final = pd.concat([X_train, X_val], ignore_index=True)
+            y_final = pd.concat([y_train, y_val], ignore_index=True)
+        else:
+            X_final, y_final = X_train, y_train
+
+        # 1. Re-Scale & Dump
+        X_final_scaled = scaler.fit_transform(X_final)
+        joblib.dump(scaler, scaler_path)
+
+        # 2. Re-PCA & Dump
+        if add_pca:
+            X_final_processed = pca.fit_transform(X_final_scaled)
+            joblib.dump(pca, output_dir / f"{variant}_pca.joblib")
+        else:
+            X_final_processed = X_final_scaled
+
+        # 3. Re-KMeans & Dump
+        if add_kmeans:
+            t_distances = kmeans.fit_transform(X_final_processed)
+            X_final_processed = np.hstack((X_final_processed, t_distances))
+            joblib.dump(kmeans, output_dir / f"{variant}_kmeans.joblib")
+
+        # 4. Tạo Weights & Fit Model trên tập đã gộp
+        final_weights = generate_sample_weights(X_final, y_final, weight_strategy, upset_weight)
+
+        with parallel_backend("threading"):
+            if variant == "rotation_forest":
+                final_clf.fit(X_final_processed, y_final.values)
+            else:
+                final_clf.fit(X_final_processed, y_final.values, sample_weight=final_weights)
+
+        # OVERFITTING DIAGNOSTIC
+        # Test trên X_final_processed thay vì X_train_processed
+        train_preds = final_clf.predict(X_final_processed)
+        train_acc = accuracy_score(y_final, train_preds)
+
+        print("\n" + "-" * 30)
+        print(" OVERFITTING CHECK")
+        print("-" * 30)
+        print(f"Training Accuracy:     {train_acc * 100:.2f}%")
+        print(f"Optuna Val Accuracy:   {study.best_value * 100:.2f}%")
+
+        # If the model scores >10% better on the training set, it is memorizing data
+        if (train_acc - study.best_value) > 0.10:
+            print(" WARNING: High likelihood of overfitting. The model is memorizing the training data.")
+            print(" TIP: Try lowering --rf_depth_max or increasing min_samples_split.")
+        print("-" * 30 + "\n")
+
+        joblib.dump(final_clf, model_path)
+
+        # ---> DYNAMIC FEATURE NAMES IF PCA IS ENABLED
+        if add_pca:
+            # Subtract the KMeans columns to get the true number of Principal Components
+            n_pcs = X_final_processed.shape[1] - (n_clusters if add_kmeans else 0)
+            final_feature_names = [f"PC{i + 1}" for i in range(n_pcs)]
+        else:
+            # Lấy tên cột từ X_final
+            final_feature_names = list(X_final.columns)
+
+        # Append the new Clustering features to the name list so they match the coefficients
+        if add_kmeans:
+            kmeans_names = [f"K-Means_Dist_C{i + 1}" for i in range(n_clusters)]
+            final_feature_names.extend(kmeans_names)
+
+        config = {
+            "model_type": variant.upper(),
+            "optimizer": "Optuna",
+            "best_params": best_params,
+            "train_accuracy": train_acc,
+            "val_accuracy": study.best_value,
+            "pca_applied": add_pca,
+            "kmeans_applied": add_kmeans,
+            "n_clusters": n_clusters if add_kmeans else 0,
+            "weight_strategy": weight_strategy,
+            "upset_weight": upset_weight,
+            "features_used": final_feature_names
+        }
+
+        with open(output_dir / f"{variant}_config.json", "w") as f:
+            json.dump(config, f, indent=4)
+
+        print("Generating plots...")
+        plot_optuna_history(study, reports_dir)
+
+        return final_clf, scaler

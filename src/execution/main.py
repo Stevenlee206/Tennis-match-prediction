@@ -9,21 +9,22 @@ from sklearn.model_selection import train_test_split
 
 def split_holdout(X_train_val, y_train_val, args):
     """
-    Chia tiếp tập Modeling Pool thành Train và Validation riêng cho chiến lược Holdout.
-    Đồng thời xử lý xóa bỏ dữ liệu tăng cường (augmented) khỏi tập Validation.
+    Further divide the Modeling Pool into separate Train and Validation sets for the Holdout strategy.
+    Simultaneously, remove augmented data from the Validation set.
     """
 
     X_train, X_val, y_train, y_val = train_test_split(
         X_train_val, y_train_val, test_size=args.val_size, shuffle=False
     )
 
-    # Tập Validation dùng để đánh giá trong quá trình train nên cũng không được chứa dữ liệu ảo
+    # The validation set used for evaluation during training should not contain virtual data.
     if 'is_augmented' in X_train.columns:
         y_val = y_val[X_val['is_augmented'] == 0]
         X_val = X_val[X_val['is_augmented'] == 0].drop(columns=['is_augmented'])
         X_train = X_train.drop(columns=['is_augmented'])
 
     return X_train, X_val, y_train, y_val
+
 def get_output_directories(args):
     BASE_DIR = Path(__file__).resolve().parent
     if args.model == "svm":
@@ -47,8 +48,9 @@ def get_output_directories(args):
     elif args.model == 'naive_bayes':
         model_subpath = 'nb'
 
-    out_dir = BASE_DIR / "outputs" / model_subpath / args.mode / args.optimizer / args.validation
-    rep_dir = BASE_DIR / "reports" / "figures" / model_subpath / args.mode / args.optimizer / args.validation
+    PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+    out_dir = PROJECT_ROOT / "outputs" / model_subpath / args.mode / args.optimizer / args.validation
+    rep_dir = PROJECT_ROOT / "reports" / "figures" / model_subpath / args.mode / args.optimizer / args.validation
 
     if args.validation == "walk_forward":
         out_dir = out_dir / f"global_tscv_{args.model}"
@@ -56,32 +58,31 @@ def get_output_directories(args):
 
     return out_dir, rep_dir
 def main():
-    # Khởi tạo cấu hình
+    # Init Config
     args = parse_arguments()
     print(f" ATP Tennis Prediction Pipeline")
     print(
         f" Model: {args.model.upper()} | Mode: {args.mode.upper()} | Optimizer: {args.optimizer.upper()} | Val: {args.validation.upper()}")
-    # Chuẩn bị dữ liệu
+    # Prepare data
     X_train_val, X_test, y_train_val, y_test = prepare_data(args)
 
-    # Định tuyến thuật toán & Thư mục
+    # Algorithm Routing & Directory
     run_pipeline = get_pipeline_runner(args.model, args.optimizer, args.mode)
     out_dir, rep_dir = get_output_directories(args)
 
-    # Gom tham số chung (Khai thác kwargs từ argparse)
+    # Gather common parameters (Extract kwargs from argparse)
     pipeline_kwargs = vars(args).copy()
     pipeline_kwargs['tscv_test_size'] = len(X_test) if args.validation == "walk_forward" else None
     sig = inspect.signature(run_pipeline)
     valid_kwargs = {k: v for k, v in pipeline_kwargs.items() if k in sig.parameters}
-    # 4. Thực thi Huấn luyện & Đánh giá
+    # Implement Training & Assessment
     print("\n Training Model ")
     if args.validation == "holdout":
         X_train, X_val, y_train, y_val = split_holdout(X_train_val, y_train_val, args)
         print(f"Holdout Splits -> Train: {len(X_train)} | Val: {len(X_val)}")
 
-        # Chạy pipeline (truyền tham số tự động nhờ kwargs)
+        # Run the pipeline (pass parameters automatically using kwargs)
         run_pipeline(X_train, y_train, X_val, y_val, out_dir, rep_dir, **valid_kwargs)
-        # Đánh giá trên tập Validation
         load_and_evaluate_model(args, X_test, y_test, out_dir)
 
     elif args.validation == "walk_forward":
@@ -92,7 +93,7 @@ def main():
 
         run_pipeline(X_train_val, y_train_val, None, None, out_dir, rep_dir, **pipeline_kwargs)
 
-        # Đánh giá trên tập Quarantine Test (Chunk cuối cùng chưa từng được sử dụng)
+        # Assessment based on the Quarantine Test (Last chunk never used)
         load_and_evaluate_model(args, X_test, y_test, out_dir)
 
     print("\n--- Xong! ---")

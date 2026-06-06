@@ -132,30 +132,11 @@ def plot_optuna_history(study, save_path):
         plt.savefig(save_path / "optuna_optimization_history.png", dpi=300)
     plt.close()
 
-
-def plot_feature_importance(clf, feature_names, save_path):
-    importances = clf.coef_[0]
-    importance_df = pd.DataFrame({
-        'Feature': feature_names,
-        'Coefficient': importances,
-        'Absolute_Importance': np.abs(importances)
-    }).sort_values(by='Absolute_Importance', ascending=False)
-
-    plt.figure(figsize=(10, 8))
-    sns.barplot(data=importance_df, x='Coefficient', y='Feature', palette="vlag")
-    plt.title("SVM Feature Importance (Linear Coefficients)")
-    plt.xlabel("Coefficient Value (Directional Impact)")
-    plt.ylabel("Feature")
-    plt.grid(True, axis="x", linestyle="--", alpha=0.7)
-    plt.tight_layout()
-    plt.savefig(save_path / "feature_importance.png", dpi=300)
-    plt.close()
-
 # ---> ADDED c_min and c_max arguments
 def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
                      n_trials=30, kernel="linear", c_min=1e-3, c_max=1e2, add_pca=False,
                      add_kmeans=False, n_clusters=5, validation="holdout",
-                     weight_strategy="none", upset_weight=1.0, n_splits=5, tscv_test_size=None):
+                     weight_strategy="none", upset_weight=1.0, n_splits=5, tscv_test_size=None,**kwargs):
     output_dir = Path(output_dir)
     reports_dir = Path(reports_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -249,10 +230,65 @@ def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
         final_feature_names = [f"PC{i+1}" for i in range(n_pcs)]
     else:
         final_feature_names = list(X_train.columns)
-        
+
+    print("\nTraining final model with optimal parameters on combined dataset...")
+    if X_val is not None:
+        X_final = pd.concat([X_train, X_val], ignore_index=True)
+        y_final = pd.concat([y_train, y_val], ignore_index=True)
+    else:
+        X_final, y_final = X_train, y_train
+
+    # 1. Re-Scale & Dump
+    X_final_scaled = scaler.fit_transform(X_final)
+    joblib.dump(scaler, scaler_path)
+
+    # 2. Re-PCA & Dump
+    if add_pca:
+        X_final_processed = pca.fit_transform(X_final_scaled)
+        joblib.dump(pca, output_dir / f"{kernel}_pca.joblib")
+    else:
+        X_final_processed = X_final_scaled
+
+    # 3. Re-KMeans & Dump
+    if add_kmeans:
+        t_distances = kmeans.fit_transform(X_final_processed)
+        X_final_processed = np.hstack((X_final_processed, t_distances))
+        joblib.dump(kmeans, output_dir / f"{kernel}_kmeans.joblib")
+
+    # 4. Tạo Weights & Fit Model trên tập đã gộp
+    final_clf = SVC(**best_params, kernel=kernel, random_state=42)
+    final_weights = generate_sample_weights(X_final, y_final, weight_strategy, upset_weight)
+    final_clf.fit(X_final_processed, y_final.values, sample_weight=final_weights)
+
+    # ==========================================
+    # OVERFITTING DIAGNOSTIC
+    # ==========================================
+    train_preds = final_clf.predict(X_final_processed)
+    train_acc = accuracy_score(y_final, train_preds)
+
+    print("\n" + "-" * 30)
+    print(" OVERFITTING CHECK")
+    print("-" * 30)
+    print(f"Training Accuracy:     {train_acc * 100:.2f}%")
+    print(f"Optuna Val Accuracy:   {study.best_value * 100:.2f}%")
+
+    if (train_acc - study.best_value) > 0.10:
+        print(" WARNING: High likelihood of overfitting.")
+    print("-" * 30 + "\n")
+
+    joblib.dump(final_clf, model_path)
+
+    # ---> LẤY TÊN CỘT TỪ TẬP FINAL
+    if add_pca:
+        # Subtract the KMeans columns to get the true number of Principal Components
+        n_pcs = X_final_processed.shape[1] - (n_clusters if add_kmeans else 0)
+        final_feature_names = [f"PC{i + 1}" for i in range(n_pcs)]
+    else:
+        final_feature_names = list(X_final.columns)
+
     # Append the new Clustering features to the name list so they match the coefficients
     if add_kmeans:
-        kmeans_names = [f"KMeans_Dist_C{i+1}" for i in range(n_clusters)]
+        kmeans_names = [f"KMeans_Dist_C{i + 1}" for i in range(n_clusters)]
         final_feature_names.extend(kmeans_names)
 
     config = {
@@ -262,21 +298,17 @@ def run_svm_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
         "train_accuracy": train_acc,
         "val_accuracy": study.best_value,
         "pca_applied": add_pca,
-        "kmeans_applied": add_kmeans,  # <--- NEW
-        "n_clusters": n_clusters if add_kmeans else 0, # <--- NEW
+        "kmeans_applied": add_kmeans,
+        "n_clusters": n_clusters if add_kmeans else 0,
         "weight_strategy": weight_strategy,
         "upset_weight": upset_weight,
         "features_used": final_feature_names
     }
+
     with open(output_dir / f"{kernel}_config.json", "w") as f:
         json.dump(config, f, indent=4)
-        
+
     print("Generating plots...")
     plot_optuna_history(study, reports_dir)
-    
-    if kernel == "linear":
-        plot_feature_importance(final_clf, final_feature_names, reports_dir)
-    else:
-        print(f"[!] Skipping Feature Importance Plot: 'coef_' is not available for the {kernel.upper()} kernel.")
-    
+
     return final_clf, scaler

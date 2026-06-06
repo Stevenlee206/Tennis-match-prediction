@@ -36,7 +36,9 @@ def _get_file_names(args):
 
 
 def _get_feature_prefix(args):
-    """Xác định tiền tố tên file cho PCA và KMeans."""
+    """
+    Define the filename prefix for PCA and K-Means.
+    """
     if args.model in ["pytorch_svm", "pytorch_mlp", "tabnet", "deepforest"]:
         return args.model.replace('pytorch_', '') + '_pytorch' if 'pytorch' in args.model else args.model
     elif args.model == "svm":
@@ -47,33 +49,33 @@ def _get_feature_prefix(args):
 
 def load_and_evaluate_model(args, X_eval, y_eval, out_dir):
     """
-    Load toàn bộ pipeline (Scaler -> PCA/KMeans -> Model), thực hiện dự đoán,
-    đánh giá thiên kiến (bias) và lưu vào file cấu hình JSON.
+    Load the entire pipeline (Scaler -> PCA/KMeans -> Model), perform predictions,
+    assess bias, and save to a JSON configuration file.
     """
     out_dir = Path(out_dir)
-    print(f"\n[*] Đang đánh giá mô hình từ thư mục: {out_dir}")
+    print(f"\n[*] Evaluating the model from the directory : {out_dir}")
 
-    # 1. Xác định tên file
+    #  Identify the file name.
     model_name, scaler_name, config_name = _get_file_names(args)
     model_path = out_dir / model_name
     scaler_path = out_dir / scaler_name
     config_path = out_dir / config_name
 
-    # Kiểm tra tồn tại (bỏ qua đuôi .zip cho TabNet khi check path nếu cần)
+    # Check for existence (ignore the .zip extension for TabNet when checking the path if necessary)
     check_model_path = Path(str(model_path).replace('.zip', '') + '.zip') if args.model == "tabnet" else model_path
 
     if not (check_model_path.exists() and scaler_path.exists()):
-        print(f"Lỗi: Không tìm thấy model hoặc scaler tại {out_dir}. Bỏ qua đánh giá.")
+        print(f" Error: Model or scaler not found at {out_dir}. Skip evaluation.")
         return
 
-    # Sao chép dữ liệu gốc để giữ lại làm bằng chứng tính Bias
+    # Copy the original data to retain as proof for calculating Bias
     X_eval_raw = X_eval.copy()
 
-    # 2. Load Scaler & Transform
+    # Load Scaler & Transform
     scaler = joblib.load(scaler_path)
     X_eval_scaled = scaler.transform(X_eval)
 
-    # 3. Load PCA & Transform
+    # Load PCA & Transform
     prefix = _get_feature_prefix(args)
     if getattr(args, 'add_pca', False):
         pca_path = out_dir / f"{prefix}_pca.joblib"
@@ -83,7 +85,7 @@ def load_and_evaluate_model(args, X_eval, y_eval, out_dir):
         else:
             print(f"Warning: PCA is enabled but not found {pca_path.name}")
 
-    # 3.1 Load KMeans & Transform
+    # Load K-Means & Transform
     if getattr(args, 'add_kmeans', False):
         kmeans_path = out_dir / f"{prefix}_kmeans.joblib"
         if kmeans_path.exists():
@@ -93,11 +95,9 @@ def load_and_evaluate_model(args, X_eval, y_eval, out_dir):
         else:
             print(f" Warning: KMeans is enabled but not found {kmeans_path.name}")
 
-    # 4. Phân luồng Load Model & Predict
-    y_pred = []
-
+    # Load Model & Prediction Threading
+    y_prob = None
     if args.model == "pytorch_svm":
-        # Import Lazy (Chỉ load PyTorch khi cần)
         import torch
         from src.models.svm.svm_pytorch_optuna import PyTorchLinearSVM
 
@@ -109,45 +109,50 @@ def load_and_evaluate_model(args, X_eval, y_eval, out_dir):
         with torch.no_grad():
             tensor_X = torch.FloatTensor(X_eval_scaled).to(device)
             preds_raw = model(tensor_X)
-            y_pred = (preds_raw > 0).cpu().numpy().astype(int)
-
+            y_pred = (preds_raw > 0).cpu().numpy().astype(int).flatten()
+            y_prob = torch.sigmoid(preds_raw).cpu().numpy().flatten()
     else:
-        # Load các model hệ Sklearn / TabNet / DeepForest
+        # Load Sklearn / TabNet / DeepForest system models
         model = joblib.load(model_path)
         y_pred = model.predict(X_eval_scaled)
+        if hasattr(model, "predict_proba"):
+            try:
+                y_prob = model.predict_proba(X_eval_scaled)[:, 1]
+            except Exception:
+                pass
 
-    # 5. Tính toán Bias & Đánh giá
-    bias_metrics = evaluate_model_bias(y_eval.values, y_pred, X_eval_raw)
+    # Bias Calculation & Rating
+    bias_metrics = evaluate_model_bias(y_eval.values, y_pred, X_eval_raw,y_prob)
 
-    # 6. Ghi kết quả vào file JSON
+    # Write the results to a JSON file.
     if config_path.exists():
         append_metrics_to_config(config_path, bias_metrics)
     else:
-        print(f"Không tìm thấy {config_name} để ghi kết quả đánh giá.")
+        print(f" Not found {config_name} to record the evaluation results.")
 
-    # 7.1. Tái tạo lại danh sách Feature Names từ dữ liệu thô
+    # Reconstructing the Feature Names list from raw data
     feature_names = list(X_eval_raw.columns)
-    # Xử lý đổi tên nếu có dùng PCA (giảm chiều)
+    # Handle renaming if PCA (dimensional reduction) is used.
     if getattr(args, 'add_pca', False) and pca_path.exists():
         feature_names = [f"PCA_{i}" for i in range(X_eval_scaled.shape[1])]
 
-        # Xử lý nối thêm tên nếu có dùng KMeans (thêm cụm)
+        # Handle name appending if using KMeans (adding clusters).
     if getattr(args, 'add_kmeans', False) and kmeans_path.exists():
         n_clusters = getattr(args, 'n_clusters', 5)
         cluster_names = [f"KMeans_Dist_{i}" for i in range(n_clusters)]
         if not getattr(args, 'add_pca', False):
             feature_names.extend(cluster_names)
 
-        # 7.2. Kích hoạt tính toán và vẽ biểu đồ
+        # Activating calculations and plotting graphs
     if args.model not in ["pytorch_svm", "pytorch_mlp"]:
-        # Gọi hàm 1: Tính toán độ quan trọng
+        # calculate feature importance
         importances = calculate_feature_importances(
             model=model,
             X_eval=X_eval_scaled,
             y_eval=y_eval.values
         )
 
-        # Gọi hàm 2: Truyền kết quả vào để vẽ
+        # plot
         plot_interpretability(
             model=model,
             X_eval=X_eval_scaled,
@@ -157,11 +162,11 @@ def load_and_evaluate_model(args, X_eval, y_eval, out_dir):
             model_name=args.model
         )
     else:
-        print(f"\n[*] Bỏ qua Feature Importance/PDP cho {args.model}.")
+        print(f"\n[*] Skip Feature Importance/PDP for {args.model}.")
 
-     # 8. ERROR ANALYSIS & HYPOTHESIS TESTING
+     # ERROR ANALYSIS & HYPOTHESIS TESTING
     print("\n" + "=" * 50)
-    print(f"[*] ĐANG PHÂN TÍCH LỖI MÔ HÌNH (ERROR ANALYSIS)")
+    print(f"[*] ERROR ANALYSIS")
     print("=" * 50)
 
     from src.execution.prediction_analysis import (
@@ -170,20 +175,19 @@ def load_and_evaluate_model(args, X_eval, y_eval, out_dir):
         plot_all_features_errors
     )
 
-    # 8.1. Kiểm tra Giả thuyết Phân bổ nhãn
+    # Testing the Label Allocation Hypothesis
     plot_prediction_summary(y_eval.values, y_pred, out_dir, args.model)
 
-    # 8.2. Kiểm tra Giả thuyết Độ tự tin (Yêu cầu model có hàm predict_proba)
+    # Test the Confidence Hypothesis (Requires the model to have a predict_proba function)
     if hasattr(model, "predict_proba"):
         try:
-        # Lấy xác suất của class 1 (Player 1 thắng)
+        # Calculate the probability of class 1 (Player 1 wins).
             y_prob = model.predict_proba(X_eval_scaled)[:, 1]
             plot_confidence_analysis(y_eval.values, y_prob, out_dir, args.model)
         except Exception as e:
-            print(f"Không thể vẽ biểu đồ Confidence: {str(e)}")
+            print(f" Unable to draw Confidence chart : {str(e)}")
     else:
-        print(f"-> Bỏ qua biểu đồ Confidence do {args.model} không hỗ trợ predict_proba.")
+        print(f"-> Ignore the Confidence chart because {args.model} predict_proba is not supported..")
 
-        # 8.3. Kiểm tra Giả thuyết Lỗi do chỉ số quá sát nhau (Dùng elo_diff)
-        # Bạn có thể thay đổi 'elo_diff' thành bất kỳ feature nào bạn muốn test (vd: 'days_since_last_match_diff')
+        # Testing the Hypothesis of Errors Due to Overly Close Indexes (Using elo_diff)
     plot_all_features_errors(X_eval_raw, y_eval.values, y_pred, out_dir, args.model)

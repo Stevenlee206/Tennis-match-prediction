@@ -65,10 +65,10 @@ def run_decision_tree_random_pipeline(X_train, y_train, X_val, y_val, output_dir
 
     force_retrain = kwargs.get('force_retrain', False)
     if not force_retrain and model_path.exists() and scaler_path.exists():
-        print(f"\n[!] Tìm thấy model tại {output_dir.name}. Bỏ qua huấn luyện!")
+        print(f"\n[!] Find model at {output_dir.name}. Skip training!")
         return joblib.load(model_path), joblib.load(scaler_path)
 
-    print(f"\n--- Bắt đầu tối ưu Decision Tree bằng Random Search ({n_trials} trials) ---")
+    print(f"\n--- Start optimizing your Decision Tree with Random Search ({n_trials} trials) ---")
 
     clf = DecisionTreeClassifier(random_state=42)
     param_dist = {
@@ -94,12 +94,12 @@ def run_decision_tree_random_pipeline(X_train, y_train, X_val, y_val, output_dir
 
     random_search.fit(X_cv, y_cv)
     best_params = random_search.best_params_
-    print(f"-> Tham số tốt nhất: {best_params}")
+    print(f"-> Best parameters : {best_params}")
 
     if len(best_params) > 0:
         plot_random_results(random_search, reports_dir)
 
-    print("\nHuấn luyện final model...")
+    print("\n Training  final model...")
     X_final = pd.concat([X_train, X_val]) if X_val is not None else X_train
     y_final = pd.concat([y_train, y_val]) if X_val is not None else y_train
 

@@ -38,11 +38,10 @@ def plot_grid_results(grid_search, reports_dir):
         else:
             filtered_df = cv_results.copy()
 
-        # Fix lỗi sort cho các cột chứa cả chuỗi và số
         try:
             filtered_df = filtered_df.sort_values(f'param_{target_param}')
         except TypeError:
-            pass  # Bỏ qua sort nếu là categorical string (như 'gini', 'entropy')
+            pass
 
         x = filtered_df[f'param_{target_param}'].astype(str)
         y = -filtered_df['mean_test_score']
@@ -68,7 +67,7 @@ def plot_grid_results(grid_search, reports_dir):
     save_path = reports_dir / "dt_grid_tuning_dashboard.png"
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
-    print(f"[*] Đã lưu biểu đồ Dashboard tuning tại: {save_path.name}")
+    print(f"[*] Dashboard tuning chart saved at: {save_path.name}")
 
 
 def run_decision_tree_grid_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, **kwargs):
@@ -81,10 +80,10 @@ def run_decision_tree_grid_pipeline(X_train, y_train, X_val, y_val, output_dir, 
 
     force_retrain = kwargs.get('force_retrain', False)
     if not force_retrain and model_path.exists() and scaler_path.exists():
-        print(f"\n[!] Tìm thấy model tại {output_dir.name}. Bỏ qua huấn luyện!")
+        print(f"\n[!] Find model at {output_dir.name}. Skip training!")
         return joblib.load(model_path), joblib.load(scaler_path)
 
-    print(f"\n--- Bắt đầu tối ưu Decision Tree bằng Grid Search ---")
+    print(f"\n--- Start optimizing your Decision Tree using Grid Search ---")
 
     clf = DecisionTreeClassifier(random_state=42)
 
@@ -95,16 +94,16 @@ def run_decision_tree_grid_pipeline(X_train, y_train, X_val, y_val, output_dir, 
         'criterion': kwargs.get('dt_grid_criterion', ['gini', 'entropy'])
     }
 
-    print(f"[*] Không gian tìm kiếm: {param_grid}")
+    print(f"[*] Search space: {param_grid}")
 
     if X_val is not None:
-        print("-> Sử dụng tập Validation cố định (Holdout)")
+        print(" Holdout ")
         X_cv = pd.concat([X_train, X_val])
         y_cv = pd.concat([y_train, y_val])
         test_fold = np.concatenate([np.full(len(X_train), -1), np.full(len(X_val), 0)])
         cv_strategy = PredefinedSplit(test_fold)
     else:
-        print("-> Sử dụng Time-Series CV 3-folds (Walk-Forward)")
+        print(" Walk-Forward ")
         X_cv = X_train
         y_cv = y_train
         cv_strategy = TimeSeriesSplit(n_splits=3)
@@ -116,12 +115,12 @@ def run_decision_tree_grid_pipeline(X_train, y_train, X_val, y_val, output_dir, 
 
     grid_search.fit(X_cv, y_cv)
     best_params = grid_search.best_params_
-    print(f"-> Tham số tốt nhất: {best_params}")
+    print(f"-> Best parameters : {best_params}")
 
     if len(best_params) > 0:
         plot_grid_results(grid_search, reports_dir)
 
-    print("\nHuấn luyện final model...")
+    print("\n Train the final model...")
     if X_val is not None:
         X_final, y_final = pd.concat([X_train, X_val]), pd.concat([y_train, y_val])
     else:
