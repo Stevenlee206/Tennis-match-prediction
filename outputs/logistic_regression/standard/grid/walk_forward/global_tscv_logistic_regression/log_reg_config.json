@@ -1,0 +1,23 @@
+{
+    "model_type": "LogisticRegression_GridSearch",
+    "best_cv_log_loss": 0.6135297693979551,
+    "best_params": {
+        "C": 0.01,
+        "max_iter": 1000,
+        "solver": "liblinear"
+    },
+    "bias_metrics": {
+        "final_accuracy": 64.85,
+        "precision": 64.5,
+        "recall": 65.08,
+        "f1_score": 64.79,
+        "matthews_corr_coef": 0.297,
+        "roc_auc": 71.64,
+        "brier_score": 0.2137,
+        "class_1_prediction_rate": 50.14,
+        "elo_reliance": 89.16,
+        "elo_baseline_accuracy": 64.09,
+        "upset_prediction_accuracy": 16.14,
+        "rank_reliance": 86.04
+    }
+}

@@ -1,0 +1,25 @@
+{
+    "model_type": "XGBoost_RandomSearch",
+    "best_params": {
+        "colsample_bytree": 0.7546941385202149,
+        "gamma": 1.873459977473469,
+        "learning_rate": 0.015097980960594266,
+        "max_depth": 6,
+        "n_estimators": 572,
+        "subsample": 0.6836286482950855
+    },
+    "bias_metrics": {
+        "final_accuracy": 66.39,
+        "precision": 65.99,
+        "recall": 66.8,
+        "f1_score": 66.39,
+        "matthews_corr_coef": 0.3279,
+        "roc_auc": 72.97,
+        "brier_score": 0.2093,
+        "class_1_prediction_rate": 50.31,
+        "elo_reliance": 86.87,
+        "elo_baseline_accuracy": 64.09,
+        "upset_prediction_accuracy": 21.49,
+        "rank_reliance": 83.81
+    }
+}

@@ -1,0 +1,25 @@
+{
+    "model_type": "XGBoost_GA",
+    "best_params": {
+        "n_estimators": 563,
+        "max_depth": 7,
+        "learning_rate": 0.011568200287040805,
+        "subsample": 0.9861832713759213,
+        "colsample_bytree": 0.6210365884962714,
+        "gamma": 1.1009849389318356
+    },
+    "bias_metrics": {
+        "final_accuracy": 66.74,
+        "precision": 66.33,
+        "recall": 67.15,
+        "f1_score": 66.74,
+        "matthews_corr_coef": 0.3348,
+        "roc_auc": 73.09,
+        "brier_score": 0.2091,
+        "class_1_prediction_rate": 50.31,
+        "elo_reliance": 86.93,
+        "elo_baseline_accuracy": 64.09,
+        "upset_prediction_accuracy": 21.87,
+        "rank_reliance": 83.54
+    }
+}

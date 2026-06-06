@@ -1,0 +1,25 @@
+{
+    "model_type": "XGBoost_Optuna",
+    "best_params": {
+        "n_estimators": 795,
+        "max_depth": 7,
+        "learning_rate": 0.011170155377940456,
+        "subsample": 0.8594695235102695,
+        "colsample_bytree": 0.6321506111851564,
+        "gamma": 1.3737398118101636
+    },
+    "bias_metrics": {
+        "final_accuracy": 66.32,
+        "precision": 65.87,
+        "recall": 66.87,
+        "f1_score": 66.37,
+        "matthews_corr_coef": 0.3265,
+        "roc_auc": 73.05,
+        "brier_score": 0.209,
+        "class_1_prediction_rate": 50.45,
+        "elo_reliance": 86.32,
+        "elo_baseline_accuracy": 64.09,
+        "upset_prediction_accuracy": 22.16,
+        "rank_reliance": 83.68
+    }
+}

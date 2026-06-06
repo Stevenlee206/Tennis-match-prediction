@@ -1,0 +1,26 @@
+{
+    "model_type": "DecisionTree_Unlimited_Baseline",
+    "best_params": {
+        "max_depth": null,
+        "min_samples_split": 2,
+        "min_samples_leaf": 1
+    },
+    "tree_stats": {
+        "depth": 45,
+        "n_leaves": 8803
+    },
+    "bias_metrics": {
+        "final_accuracy": 58.13,
+        "precision": 57.74,
+        "recall": 58.66,
+        "f1_score": 58.2,
+        "matthews_corr_coef": 0.1626,
+        "roc_auc": 58.13,
+        "brier_score": 0.4187,
+        "class_1_prediction_rate": 50.48,
+        "elo_reliance": 63.65,
+        "elo_baseline_accuracy": 64.09,
+        "upset_prediction_accuracy": 42.31,
+        "rank_reliance": 63.2
+    }
+}

@@ -1,0 +1,20 @@
+{
+    "model_type": "NB_GridSearch",
+    "best_params": {
+        "var_smoothing": 0.1
+    },
+    "bias_metrics": {
+        "final_accuracy": 64.33,
+        "precision": 64.15,
+        "recall": 63.98,
+        "f1_score": 64.06,
+        "matthews_corr_coef": 0.2867,
+        "roc_auc": 70.73,
+        "brier_score": 0.2921,
+        "class_1_prediction_rate": 49.55,
+        "elo_reliance": 90.36,
+        "elo_baseline_accuracy": 64.09,
+        "upset_prediction_accuracy": 13.75,
+        "rank_reliance": 81.41
+    }
+}

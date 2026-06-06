@@ -1,0 +1,24 @@
+{
+    "model_type": "XGBoost_GridSearch",
+    "best_params": {
+        "colsample_bytree": 0.8,
+        "learning_rate": 0.01,
+        "max_depth": 7,
+        "n_estimators": 800,
+        "subsample": 0.6
+    },
+    "bias_metrics": {
+        "final_accuracy": 65.91,
+        "precision": 65.36,
+        "recall": 66.8,
+        "f1_score": 66.08,
+        "matthews_corr_coef": 0.3184,
+        "roc_auc": 72.86,
+        "brier_score": 0.2095,
+        "class_1_prediction_rate": 50.79,
+        "elo_reliance": 86.11,
+        "elo_baseline_accuracy": 64.09,
+        "upset_prediction_accuracy": 21.87,
+        "rank_reliance": 83.68
+    }
+}
