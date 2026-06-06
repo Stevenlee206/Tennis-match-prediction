@@ -19,6 +19,7 @@ from src.preprocessing.feature_selection import feature_selection
 from src.preprocessing.context_features import apply_fatigue_and_clutch_metrics
 from src.preprocessing.gao_features import apply_historical_serve_metrics
 from src.preprocessing.matchup_features import apply_matchup_topography
+from src.preprocessing.rating.h2h_calculator import apply_advanced_h2h
 
 class BenchmarkDataPipeline(Preprocessing):
     """
@@ -75,6 +76,9 @@ class BenchmarkDataPipeline(Preprocessing):
         data = apply_fatigue_and_clutch_metrics(data, train_split_idx)
         data = apply_matchup_topography(data)
         
+        print("Calculating Advanced H2H...")
+        data = apply_advanced_h2h(data, alpha=0.01, c=2.0)
+        
         data = create_target(data, augment=True)
         
         # Since augment=True perfectly interleaves the duplicate matches,
@@ -122,19 +126,21 @@ def get_benchmark_splits(data: pd.DataFrame, train_split_idx: int, pre_2025_coun
     # 1. D_Train_Base: 90% of pre-2025
     D_Train_Base = data.iloc[:train_split_idx].copy()
     
-    # 2. Find 2026 boundaries
+    # 2. Find 2025 and 2026 boundaries
+    is_2025 = data['tourney_date'].dt.year == 2025
     is_2026 = data['tourney_date'].dt.year >= 2026
-    if not is_2026.any():
-        is_2026 = data['tourney_date'].dt.year >= 2025
-
-    idx_2026_start = data[is_2026].index[0]
+    
+    idx_2025_start = data[is_2025].index[0] if is_2025.any() else len(data)
+    idx_2026_start = data[is_2026].index[0] if is_2026.any() else len(data)
+    
+    total_2025_matches = idx_2026_start - idx_2025_start
     total_2026_matches = len(data) - idx_2026_start
     
-    # D_Mean: remaining 10% of pre-2025 + all 2025 + first 10% of 2026
-    idx_mean_end = idx_2026_start + int(0.10 * total_2026_matches)
+    # D_Mean: remaining 10% of pre-2025 + 90% of 2025
+    idx_mean_end = idx_2025_start + int(0.90 * total_2025_matches) if total_2025_matches > 0 else idx_2026_start
     
-    # D_Test: 10% to 50% of 2026
-    idx_test_end = idx_2026_start + int(0.50 * total_2026_matches)
+    # D_Test: remaining 10% of 2025 + 50% of 2026
+    idx_test_end = idx_2026_start + int(0.50 * total_2026_matches) if total_2026_matches > 0 else len(data)
     
     D_Mean = data.iloc[train_split_idx:idx_mean_end].copy()
     D_Test = data.iloc[idx_mean_end:idx_test_end].copy()
