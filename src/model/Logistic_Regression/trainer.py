@@ -7,6 +7,8 @@ from sklearn.metrics import (
     roc_auc_score, precision_recall_curve, auc, 
     matthews_corrcoef, brier_score_loss
 )
+from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix
+import matplotlib.pyplot as plt
 
 def calculate_metrics(y_true, y_pred, y_prob):
     acc = accuracy_score(y_true, y_pred)
@@ -30,6 +32,26 @@ def calculate_metrics(y_true, y_pred, y_prob):
         "Brier-Score": brier
     }
 
+def save_final_confusion_matrix(y_true, y_pred, results_dir):
+    os.makedirs(results_dir, exist_ok=True)
+    display_labels = ['Player 2 Wins', 'Player 1 Wins']
+    
+    ConfusionMatrixDisplay.from_predictions(
+        y_true=y_true,
+        y_pred=y_pred,
+        display_labels=display_labels,
+        cmap=plt.cm.Blues,
+        values_format='d'
+    )
+    model_title = "Logistic Regression" if "Logistic_Regression" in results_dir else "Naive Bayes"
+    plt.title(f"{model_title} - Final Test Confusion Matrix")
+    plt.xlabel("Predicted Match Winner")
+    plt.ylabel("Actual Match Winner")
+
+    output_path = os.path.join(results_dir, "confusion_matrix.png")
+    plt.savefig(output_path, bbox_inches='tight', dpi=300)
+    plt.close()
+    
 def time_series_cv(model,X, y, results_dir="results/Logistic_Regression"):
     # Do chronological walk-forward validation with fold 1 to 5 and then do a final test evaluation and then save it to a csv.
     os.makedirs(results_dir, exist_ok=True)
@@ -67,6 +89,8 @@ def time_series_cv(model,X, y, results_dir="results/Logistic_Regression"):
     model.fit(X_train_final, y_train_final)
     test_preds = model.predict(X_test)
     test_probs = model.predict_proba(X_test)[:, 1]
+    
+    save_final_confusion_matrix(y_test, test_preds, results_dir)
     
     test_metrics = calculate_metrics(y_test, test_preds, test_probs)
     test_metrics["Phase"] = "FINAL TEST (Train 90% -> Test Final 10%)"
