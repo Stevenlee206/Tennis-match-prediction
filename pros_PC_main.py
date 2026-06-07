@@ -171,8 +171,8 @@ def run_benchmark():
         model_out_dir = os.path.join(run_dir, model_type)
         os.makedirs(model_out_dir, exist_ok=True)
         
-        static_weights_path = os.path.join(weights_dir, f"{model_type}_static.pt" if model_type == "nn" else f"{model_type}_static.npz")
-        online_weights_path = os.path.join(weights_dir, f"{model_type}_online.pt" if model_type == "nn" else f"{model_type}_online.npz")
+        static_weights_path = os.path.join(weights_dir, f"{model_type}_static.pt")
+        online_weights_path = os.path.join(weights_dir, f"{model_type}_online.pt")
         
         # Use fixed hyperparameters instead of Optuna tuning
         print(f"\n[PHASE: USING FIXED HYPERPARAMETERS FOR {model_type.upper()}]")
@@ -211,8 +211,7 @@ def run_benchmark():
                 plot_learning_curves(history, f'{model_type.upper()} STATIC Learning Curves', os.path.join(mode_dir, 'learning_curves.png'))
                 
                 # Save
-                if model_type == "nn": torch.save(model.get_state_dict(), static_weights_path)
-                elif model_type == "pcn": np.savez(static_weights_path, **model.get_state_dict())
+                torch.save(model.get_state_dict(), static_weights_path)
                 
                 probs = model.predict_proba(X_test)
                 
@@ -237,8 +236,7 @@ def run_benchmark():
                 plot_streaming_accuracy(rolling_history, f'{model_type.upper()} ONLINE Streaming Acc', os.path.join(mode_dir, 'streaming_acc.png'))
                 
                 # Save online weights
-                if model_type == "nn": torch.save(model.get_state_dict(), online_weights_path)
-                elif model_type == "pcn": np.savez(online_weights_path, **model.get_state_dict())
+                torch.save(model.get_state_dict(), online_weights_path)
                 
                 # Evaluate frozen weights on X_test for fair comparison
                 probs = model.predict_proba(X_test)

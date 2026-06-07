@@ -95,7 +95,7 @@ def main():
     
     models_to_run = ["nn", "pcn"] if args.model == "both" else [args.model]
     
-    pc_model_path = os.path.join(args.pcn_dir, "pc_model.npz") if args.pcn_dir else ""
+    pc_model_path = os.path.join(args.pcn_dir, "pc_model.pt") if args.pcn_dir else ""
     pc_config_path = os.path.join(args.pcn_dir, "pc_config.json") if args.pcn_dir else ""
     
     # Scale Data
@@ -154,7 +154,7 @@ def main():
             if model_type == "nn":
                 torch.save(model.get_state_dict(), os.path.join(weights_dir, f"{model_type}_retrain_weights.pt"))
             elif model_type == "pcn":
-                np.savez(os.path.join(weights_dir, f"{model_type}_retrain_weights.npz"), **model.get_state_dict())
+                torch.save(model.get_state_dict(), os.path.join(weights_dir, f"{model_type}_retrain_weights.pt"))
             
         if args.run_finetune:
             print("\n[MODE: FINE-TUNE]")
@@ -181,7 +181,7 @@ def main():
             if model_type == "nn":
                 torch.save(model.get_state_dict(), os.path.join(weights_dir, f"{model_type}_finetune_weights.pt"))
             elif model_type == "pcn":
-                np.savez(os.path.join(weights_dir, f"{model_type}_finetune_weights.npz"), **model.get_state_dict())
+                torch.save(model.get_state_dict(), os.path.join(weights_dir, f"{model_type}_finetune_weights.pt"))
 
     # Finalize: Save Metrics & Visualize
     metrics_file = os.path.join(run_dir, "metrics.json")

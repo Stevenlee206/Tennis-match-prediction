@@ -92,8 +92,11 @@ def get_pcn_model(input_dim, mode, weights_path, config_path):
     
     if mode in ['static', 'finetune'] and weights_path and os.path.exists(weights_path):
         try:
-            state = np.load(weights_path, allow_pickle=True)
-            state_dict = {k: state[k] for k in state.files}
+            if weights_path.endswith('.npz'):
+                state = np.load(weights_path, allow_pickle=True)
+                state_dict = {k: state[k] for k in state.files}
+            else:
+                state_dict = torch.load(weights_path, map_location=device, weights_only=True)
             model.load_state_dict(state_dict)
             print(f"Loaded PCN weights from {weights_path}")
         except Exception as e:
@@ -123,9 +126,15 @@ def create_model_wrapper(model_type, input_dim, params, base_weights_path=None):
         wrapper = pcn_model
         
         if base_weights_path and os.path.exists(base_weights_path):
-            state = np.load(base_weights_path, allow_pickle=True)
-            state_dict = {k: state[k] for k in state.files}
-            wrapper.load_state_dict(state_dict)
+            try:
+                if base_weights_path.endswith('.npz'):
+                    state = np.load(base_weights_path, allow_pickle=True)
+                    state_dict = {k: state[k] for k in state.files}
+                else:
+                    state_dict = torch.load(base_weights_path, map_location=device, weights_only=True)
+                wrapper.load_state_dict(state_dict)
+            except Exception as e:
+                print(f"Failed to load base PCN weights: {e}")
             
     return wrapper
 
@@ -320,10 +329,7 @@ def train_model_full(model_type, input_dim, X: np.ndarray, y: np.ndarray, best_p
                 best_epoch = epoch + 1
                 epochs_no_improve = 0
                 # Save best state dict
-                if model_type == "nn":
-                    best_state = {k: v.clone() for k, v in wrapper.get_state_dict().items()}
-                else:
-                    best_state = {k: v.copy() for k, v in wrapper.get_state_dict().items()}
+                best_state = {k: v.clone() if isinstance(v, torch.Tensor) else v.copy() for k, v in wrapper.get_state_dict().items()}
             else:
                 epochs_no_improve += 1
             

@@ -302,7 +302,7 @@ def run_pc_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
     output_dir.mkdir(parents=True, exist_ok=True)
     reports_dir.mkdir(parents=True, exist_ok=True)
 
-    model_path = output_dir / "pc_model.npz"
+    model_path = output_dir / "pc_model.pt"
     scaler_path = output_dir / "pc_scaler.joblib"
     config_path = output_dir / "pc_config.json"
     log_path = output_dir / "log.txt"
@@ -399,7 +399,7 @@ def run_pc_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
     
     # Save artifacts
     model.load_state_dict(best_state)
-    np.savez(model_path, **best_state)
+    torch.save(best_state, model_path)
     joblib.dump(scaler, scaler_path)
     
     # Save training loop log text

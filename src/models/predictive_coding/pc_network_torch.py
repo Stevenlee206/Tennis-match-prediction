@@ -93,14 +93,14 @@ class PredictiveCodingNetworkTorch:
         return self.pcnet.x, dummy_u
 
     def get_state_dict(self) -> dict:
-        """Returns standard state dict with W_l and b_l as numpy arrays."""
+        """Returns standard state dict with W_l and b_l as PyTorch tensors."""
         state = {}
         for l in range(self.pcnet.L):
             # Transpose PRECO's (in_dim, out_dim) weight matrix to (out_dim, in_dim)
-            W_np = self.pcnet.w[l].detach().cpu().numpy().T.astype(np.float32)
-            b_np = self.pcnet.b[l].detach().cpu().numpy().astype(np.float32)
-            state[f"W_{l}"] = W_np
-            state[f"b_{l}"] = b_np
+            W_pt = self.pcnet.w[l].detach().T.clone()
+            b_pt = self.pcnet.b[l].detach().clone()
+            state[f"W_{l}"] = W_pt
+            state[f"b_{l}"] = b_pt
         return state
 
     def load_state_dict(self, state: dict) -> None:
@@ -109,14 +109,19 @@ class PredictiveCodingNetworkTorch:
             W = state[f"W_{l}"]
             b = state[f"b_{l}"]
 
-            if isinstance(W, torch.Tensor):
-                W = W.detach().cpu().numpy()
-            if isinstance(b, torch.Tensor):
-                b = b.detach().cpu().numpy()
+            if not isinstance(W, torch.Tensor):
+                W = torch.tensor(W, device=self.device, dtype=torch.float32)
+            else:
+                W = W.to(self.device, dtype=torch.float32)
+
+            if not isinstance(b, torch.Tensor):
+                b = torch.tensor(b, device=self.device, dtype=torch.float32)
+            else:
+                b = b.to(self.device, dtype=torch.float32)
 
             # Transpose from standard (out_dim, in_dim) to PRECO's (in_dim, out_dim)
-            self.pcnet.w[l] = torch.tensor(W.T, device=self.device, dtype=torch.float32)
-            self.pcnet.b[l] = torch.tensor(b, device=self.device, dtype=torch.float32)
+            self.pcnet.w[l] = W.T.clone()
+            self.pcnet.b[l] = b.clone()
 
     def train_on_batch(self, x0: torch.Tensor, y: torch.Tensor, sample_weights: torch.Tensor | None = None) -> float:
         """Runs iterative inference followed by parameter updates."""

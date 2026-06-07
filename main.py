@@ -347,7 +347,7 @@ def main():
         elif args.model == "deepforest":
             model_name, scaler_name, config_name = "deepforest_model.joblib", "deepforest_scaler.joblib", "deepforest_config.json"
         elif args.model == "predictive_coding":
-            model_name, scaler_name, config_name = "pc_model.npz", "pc_scaler.joblib", "pc_config.json"
+            model_name, scaler_name, config_name = "pc_model.pt", "pc_scaler.joblib", "pc_config.json"
         else:
             model_name, scaler_name, config_name = f"{args.rf_variant}_model.joblib", f"{args.rf_variant}_scaler.joblib", f"{args.rf_variant}_config.json"
             
@@ -506,7 +506,7 @@ def main():
             print("\n" + "="*50)
             print(" FINAL EVALUATION ON UNSEEN TEST SET (90-10)")
             print("="*50)
-            model_name, scaler_name, config_name = "pc_model.npz", "pc_scaler.joblib", "pc_config.json"
+            model_name, scaler_name, config_name = "pc_model.pt", "pc_scaler.joblib", "pc_config.json"
             model_path = Path(args.weights_dir) / model_name if args.weights_dir else global_out / model_name
             scaler_path = Path(args.weights_dir) / scaler_name if args.weights_dir else global_out / scaler_name
             config_path = Path(args.weights_dir) / config_name if args.weights_dir else global_out / config_name
@@ -527,7 +527,10 @@ def main():
                 device = "cuda" if torch.cuda.is_available() else "cpu"
                 best_model = PredictiveCodingNetworkTorch(layer_sizes=layer_sizes, cfg=pc_cfg, device=device)
                 
-                state = dict(np.load(model_path))
+                if str(model_path).endswith('.npz'):
+                    state = dict(np.load(model_path))
+                else:
+                    state = torch.load(model_path, map_location=device, weights_only=True)
                 best_model.load_state_dict(state)
                 probs = best_model.predict_proba_torch(X_test_scaled).detach().cpu().numpy()
                 y_pred_test = (probs >= 0.5).astype(int)
@@ -559,7 +562,7 @@ def main():
         elif args.model == "deepforest":
             model_name, scaler_name, config_name = "deepforest_model.joblib", "deepforest_scaler.joblib", "deepforest_config.json"
         elif args.model == "predictive_coding":
-            model_name, scaler_name, config_name = "pc_model.npz", "pc_scaler.joblib", "pc_config.json"
+            model_name, scaler_name, config_name = "pc_model.pt", "pc_scaler.joblib", "pc_config.json"
         else:
             model_name, scaler_name, config_name = f"{args.rf_variant}_model.joblib", f"{args.rf_variant}_scaler.joblib", f"{args.rf_variant}_config.json"
             
@@ -629,7 +632,10 @@ def main():
                 best_model = PredictiveCodingNetworkTorch(layer_sizes=layer_sizes, cfg=pc_cfg, device=device)
                 
                 # Load weights
-                state = dict(np.load(model_path))
+                if str(model_path).endswith('.npz'):
+                    state = dict(np.load(model_path))
+                else:
+                    state = torch.load(model_path, map_location=device, weights_only=True)
                 best_model.load_state_dict(state)
                 probs = best_model.predict_proba_torch(X_val_scaled).detach().cpu().numpy()
                 y_pred_val = (probs >= 0.5).astype(int)
