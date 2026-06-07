@@ -255,38 +255,93 @@ def find_optimal_epochs_tscv(model_type, input_dim, X, y, params, n_splits=5, ma
     print(f"Optimal epochs found: {optimal_epochs}")
     return optimal_epochs
 
-def train_model_full(model_type, input_dim, X: np.ndarray, y: np.ndarray, best_params, epochs=30, batch_size=64, base_weights_path=None):
+def train_model_full(model_type, input_dim, X: np.ndarray, y: np.ndarray, best_params, epochs=30, batch_size=64, base_weights_path=None, val_split=0.15, patience=10):
     """
     Trains the model on the full X, y using best_params.
+    Includes temporal validation split and early stopping to prevent overfitting.
     """
     wrapper = create_model_wrapper(model_type, input_dim, best_params, base_weights_path)
     if base_weights_path and os.path.exists(base_weights_path):
         print(f"Loaded base {model_type.upper()} weights for training from {base_weights_path}")
 
-    history = {'loss': [], 'accuracy': []}
-    from sklearn.metrics import accuracy_score
+    from sklearn.metrics import accuracy_score, log_loss
     
-    print(f"Training final {model_type.upper()} model for {epochs} epochs on {len(X)} samples...")
+    # 1. Temporal split for validation
+    if val_split > 0 and len(X) > 10:
+        split_idx = int(len(X) * (1 - val_split))
+        X_train, X_val = X[:split_idx], X[split_idx:]
+        y_train, y_val = y[:split_idx], y[split_idx:]
+        print(f"Split data into Train: {len(X_train)} samples, Val: {len(X_val)} samples.")
+    else:
+        X_train, X_val = X, None
+        y_train, y_val = y, None
+        print(f"Training on all {len(X_train)} samples without validation split.")
+
+    history = {'loss': [], 'accuracy': []}
+    if X_val is not None:
+        history['val_loss'] = []
+        history['val_accuracy'] = []
+
+    best_val_loss = float('inf')
+    best_state = None
+    best_epoch = 0
+    epochs_no_improve = 0
+
+    print(f"Training final {model_type.upper()} model for max {epochs} epochs on {len(X_train)} samples...")
     for epoch in range(epochs):
-        indices = np.random.permutation(len(X))
-        X_shuf, y_shuf = X[indices], y[indices]
+        indices = np.random.permutation(len(X_train))
+        X_shuf, y_shuf = X_train[indices], y_train[indices]
         
         losses = []
-        for i in range(0, len(X), batch_size):
+        for i in range(0, len(X_train), batch_size):
             loss = wrapper.train_on_batch(X_shuf[i:i+batch_size], y_shuf[i:i+batch_size])
             losses.append(loss)
             
         epoch_loss = np.mean(losses)
         
-        probs = wrapper.predict_proba(X)
-        acc = accuracy_score(y, (probs >= 0.5).astype(int))
+        # Train metrics
+        probs = wrapper.predict_proba(X_train)
+        acc = accuracy_score(y_train, (probs >= 0.5).astype(int))
         
         history['loss'].append(epoch_loss)
         history['accuracy'].append(acc)
         
-        if (epoch + 1) % 5 == 0 or epoch == 0:
-            print(f" Epoch {epoch+1}/{epochs} - Train Loss: {epoch_loss:.4f} - Train Acc: {acc:.4f}")
+        # Validation and Early Stopping
+        if X_val is not None:
+            val_probs = wrapper.predict_proba(X_val)
+            val_loss = log_loss(y_val, val_probs)
+            val_acc = accuracy_score(y_val, (val_probs >= 0.5).astype(int))
             
+            history['val_loss'].append(val_loss)
+            history['val_accuracy'].append(val_acc)
+            
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                best_epoch = epoch + 1
+                epochs_no_improve = 0
+                # Save best state dict
+                if model_type == "nn":
+                    best_state = {k: v.clone() for k, v in wrapper.get_state_dict().items()}
+                else:
+                    best_state = {k: v.copy() for k, v in wrapper.get_state_dict().items()}
+            else:
+                epochs_no_improve += 1
+            
+            if (epoch + 1) % 5 == 0 or epoch == 0:
+                print(f" Epoch {epoch+1:02d}/{epochs} - Loss: {epoch_loss:.4f} - Acc: {acc:.4f} | Val Loss: {val_loss:.4f} - Val Acc: {val_acc:.4f}")
+                
+            if epochs_no_improve >= patience:
+                print(f" Early stopping triggered at epoch {epoch+1}. Best epoch was {best_epoch} (Val Loss: {best_val_loss:.4f})")
+                break
+        else:
+            if (epoch + 1) % 5 == 0 or epoch == 0:
+                print(f" Epoch {epoch+1:02d}/{epochs} - Train Loss: {epoch_loss:.4f} - Train Acc: {acc:.4f}")
+
+    # Restore best weights
+    if X_val is not None and best_state is not None:
+        wrapper.load_state_dict(best_state)
+        print(f"Restored best weights from epoch {best_epoch} (Val Loss: {best_val_loss:.4f})")
+
     return wrapper, history
 
 def train_online_stream(model_type, input_dim, X: np.ndarray, y: np.ndarray, best_params, batch_size=50, base_weights_path=None):

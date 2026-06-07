@@ -44,6 +44,8 @@ def plot_learning_curves(history, title, save_path):
     plt.figure(figsize=(12, 5))
     plt.subplot(1, 2, 1)
     plt.plot(history['loss'], label='Train Loss', color='red')
+    if 'val_loss' in history:
+        plt.plot(history['val_loss'], label='Val Loss', color='orange', linestyle='--')
     plt.title('Loss over Epochs')
     plt.xlabel('Epoch')
     plt.ylabel('Loss/Energy')
@@ -51,6 +53,8 @@ def plot_learning_curves(history, title, save_path):
     
     plt.subplot(1, 2, 2)
     plt.plot(history['accuracy'], label='Train Acc', color='blue')
+    if 'val_accuracy' in history:
+        plt.plot(history['val_accuracy'], label='Val Acc', color='green', linestyle='--')
     plt.title('Accuracy over Epochs')
     plt.xlabel('Epoch')
     plt.ylabel('Accuracy')
@@ -170,12 +174,24 @@ def run_benchmark():
         static_weights_path = os.path.join(weights_dir, f"{model_type}_static.pt" if model_type == "nn" else f"{model_type}_static.npz")
         online_weights_path = os.path.join(weights_dir, f"{model_type}_online.pt" if model_type == "nn" else f"{model_type}_online.npz")
         
-        # We must tune on static first to get best_params
-        print(f"\n[PHASE: TUNING {model_type.upper()}]")
-        best_params = tune_hyperparameters_tscv(
-            model_type, input_dim, X_base, y_base, 
-            n_splits=5, n_trials=TRIALS, max_epochs=EPOCHS, patience=PATIENCE
-        )
+        # Use fixed hyperparameters instead of Optuna tuning
+        print(f"\n[PHASE: USING FIXED HYPERPARAMETERS FOR {model_type.upper()}]")
+        if model_type == "nn":
+            best_params = {
+                "lr": 0.0001,
+                "wd": 0.00003,
+                "dropout": 0.3,
+                "optimal_epochs": 50
+            }
+        elif model_type == "pcn":
+            best_params = {
+                "lr": 0.0005,
+                "inference_lr": 0.03,
+                "inference_steps": 20,
+                "optimal_epochs": 100
+            }
+        else:
+            best_params = {}
         
         with open(os.path.join(model_out_dir, 'best_params.json'), 'w') as f:
             json.dump(best_params, f, indent=4)
@@ -185,10 +201,12 @@ def run_benchmark():
             mode_dir = os.path.join(model_out_dir, mode)
             os.makedirs(mode_dir, exist_ok=True)
             
+            # Use fixed optimal epochs from the hyperparameters dict
+            opt_epochs = best_params.get("optimal_epochs", 50)
+            
             if mode == "static":
                 X_train_pool, y_train_pool = X_base, y_base
                 base_weights = None
-                opt_epochs = best_params.get("optimal_epochs", 50)
                 model, history = train_model_full(model_type, input_dim, X_train_pool, y_train_pool, best_params, epochs=opt_epochs, batch_size=64, base_weights_path=base_weights)
                 plot_learning_curves(history, f'{model_type.upper()} STATIC Learning Curves', os.path.join(mode_dir, 'learning_curves.png'))
                 
@@ -201,8 +219,6 @@ def run_benchmark():
             elif mode == "finetune":
                 X_train_pool, y_train_pool = X_mean, y_mean
                 base_weights = static_weights_path
-                # TSCV Early Stopping to find optimal epochs on Finetune pool
-                opt_epochs = find_optimal_epochs_tscv(model_type, input_dim, X_train_pool, y_train_pool, best_params, n_splits=5, max_epochs=EPOCHS, patience=PATIENCE, base_weights_path=base_weights)
                 model, history = train_model_full(model_type, input_dim, X_train_pool, y_train_pool, best_params, epochs=opt_epochs, batch_size=64, base_weights_path=base_weights)
                 plot_learning_curves(history, f'{model_type.upper()} FINETUNE Learning Curves', os.path.join(mode_dir, 'learning_curves.png'))
                 probs = model.predict_proba(X_test)
@@ -210,7 +226,6 @@ def run_benchmark():
             elif mode == "retrain":
                 X_train_pool, y_train_pool = X_base_mean, y_base_mean
                 base_weights = None
-                opt_epochs = find_optimal_epochs_tscv(model_type, input_dim, X_train_pool, y_train_pool, best_params, n_splits=5, max_epochs=EPOCHS, patience=PATIENCE, base_weights_path=base_weights)
                 model, history = train_model_full(model_type, input_dim, X_train_pool, y_train_pool, best_params, epochs=opt_epochs, batch_size=64, base_weights_path=base_weights)
                 plot_learning_curves(history, f'{model_type.upper()} RETRAIN Learning Curves', os.path.join(mode_dir, 'learning_curves.png'))
                 probs = model.predict_proba(X_test)
