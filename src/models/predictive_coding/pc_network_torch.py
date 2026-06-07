@@ -1,215 +1,125 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import List, Sequence, Tuple
-
 import numpy as np
-
-try:
-    import torch
-except Exception as e:  # pragma: no cover
-    torch = None  # type: ignore
+import torch
 
 from src.models.predictive_coding.pc_network import PCNetworkConfig
+import src.models.preco.utils as preco_utils
+import src.models.preco.optim as preco_optim
+from src.models.preco.PCN import PCnet
+from src.models.preco.structure import PCN_MBA
 
-
-def _get_activation_torch(name: str):
-    name = name.lower().strip()
-
-    if torch is None:
-        raise ImportError("PyTorch is required for PredictiveCodingNetworkTorch")
-
-    if name == "relu":
-        act = torch.relu
-
-        def dact(u: torch.Tensor) -> torch.Tensor:
-            return (u > 0).to(u.dtype)
-
-        return act, dact
-
-    if name == "tanh":
-        act = torch.tanh
-
-        def dact(u: torch.Tensor) -> torch.Tensor:
-            y = torch.tanh(u)
-            return 1.0 - y * y
-
-        return act, dact
-
-    if name == "sigmoid":
-        act = torch.sigmoid
-
-        def dact(u: torch.Tensor) -> torch.Tensor:
-            s = torch.sigmoid(u)
-            return s * (1.0 - s)
-
-        return act, dact
-
-    if name == "identity":
-        def act(u: torch.Tensor) -> torch.Tensor:
-            return u
-
-        def dact(u: torch.Tensor) -> torch.Tensor:
-            return torch.ones_like(u)
-
-        return act, dact
-
-    raise KeyError(f"Unknown activation '{name}'.")
-
-
-class _PCLayerTorch:
-    def __init__(self, in_dim: int, out_dim: int, activation: str, rng: np.random.Generator, device: str):
-        if torch is None:
-            raise ImportError("PyTorch is required for _PCLayerTorch")
-
-        self.in_dim = int(in_dim)
-        self.out_dim = int(out_dim)
-        self.activation_name = activation
-        self.device = device
-
-        self.act, self.dact = _get_activation_torch(activation)
-
-        # Xavier/Glorot uniform init (match numpy implementation)
-        limit = float(np.sqrt(6.0 / (self.in_dim + self.out_dim)))
-        W_np = rng.uniform(-limit, limit, size=(self.out_dim, self.in_dim)).astype(np.float32)
-        b_np = np.zeros((self.out_dim,), dtype=np.float32)
-
-        self.W = torch.tensor(W_np, device=self.device, dtype=torch.float32)
-        self.b = torch.tensor(b_np, device=self.device, dtype=torch.float32)
-
-    def predict(self, x_in: "torch.Tensor") -> Tuple["torch.Tensor", "torch.Tensor"]:
-        # u = x @ W^T + b
-        u = x_in @ self.W.t() + self.b
-        return self.act(u), u
-
-    def set_weights_from_numpy(self, W: np.ndarray, b: np.ndarray) -> None:
-        self.W = torch.tensor(W.astype(np.float32), device=self.device, dtype=torch.float32)
-        self.b = torch.tensor(b.astype(np.float32), device=self.device, dtype=torch.float32)
-
-    def get_weights_numpy(self) -> Tuple[np.ndarray, np.ndarray]:
-        return self.W.detach().cpu().numpy().astype(np.float32), self.b.detach().cpu().numpy().astype(np.float32)
-
+# Mapping string names to PRECO activation functions
+act_map = {
+    "tanh": preco_utils.tanh,
+    "relu": preco_utils.relu,
+    "sigmoid": preco_utils.sigmoid,
+    "silu": preco_utils.silu,
+    "identity": preco_utils.linear,
+    "linear": preco_utils.linear,
+    "leaky_relu": preco_utils.leaky_relu,
+}
 
 class PredictiveCodingNetworkTorch:
-    """Predictive Coding network implemented in PyTorch (supports GPU).
-
-    This keeps the same conceptual algorithm as the NumPy version:
-    - Forward initializes states.
-    - Iterative inference updates hidden states to reduce energy.
-    - Local weight updates using prediction errors.
-
-    Notes:
-    - Uses manual tensor updates (no autograd required).
-    - Saves/loads using NumPy-compatible state dict: {W_0, b_0, W_1, b_1, ...}
+    """Predictive Coding network implemented using the PRECO library.
+    
+    Acts as a wrapper to maintain compatibility with the existing project structure.
     """
-
     is_torch = True
 
     def __init__(self, layer_sizes: Sequence[int], cfg: PCNetworkConfig, device: str | None = None):
-        if torch is None:
-            raise ImportError("PyTorch is required for PredictiveCodingNetworkTorch")
-
         if len(layer_sizes) < 2:
-            raise ValueError("layer_sizes must include input and output")
+            raise ValueError("layer_sizes must include input and output dimensions")
 
         self.layer_sizes = list(layer_sizes)
         self.cfg = cfg
 
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        if device is not None:
+            preco_utils.DEVICE = torch.device(device)
+        self.device = preco_utils.DEVICE
 
-        # Keep numpy RNG for identical init stats
-        self.rng = np.random.default_rng(cfg.random_seed)
+        # Seed configuration
+        preco_utils.seed(cfg.random_seed)
 
-        self.layers: List[_PCLayerTorch] = []
-        for i in range(len(layer_sizes) - 1):
-            act = cfg.output_activation if i == len(layer_sizes) - 2 else cfg.hidden_activation
-            self.layers.append(_PCLayerTorch(layer_sizes[i], layer_sizes[i + 1], act, rng=self.rng, device=self.device))
+        # 1. Resolve activation functions (always use sigmoid output activation for classification)
+        f_act = act_map.get(cfg.hidden_activation.lower(), preco_utils.tanh)
+        fL_act = preco_utils.sigmoid
 
-    def forward(self, x0: "torch.Tensor") -> Tuple[List["torch.Tensor"], List["torch.Tensor"]]:
-        x: List[torch.Tensor] = [x0.to(self.device, dtype=torch.float32)]
-        u_list: List[torch.Tensor] = [torch.empty((x0.shape[0], 0), device=self.device, dtype=torch.float32)]
+        # 2. Define structures (PCN_MBA is the standard multilayer prediction)
+        structure = PCN_MBA(
+            layers=self.layer_sizes,
+            f=f_act,
+            use_bias=True,
+            upward=True,
+            fL=fL_act
+        )
 
-        for layer in self.layers:
-            pred, u = layer.predict(x[-1])
-            x.append(pred)
-            u_list.append(u)
+        # 3. Create PRECO PCnet model
+        self.pcnet = PCnet(
+            lr_x=cfg.inference_lr,
+            T_train=cfg.inference_steps,
+            structure=structure,
+            incremental=False,
+            use_feedforward_init=True
+        )
 
-        return x, u_list
+        # 4. Connect Adam Optimizer
+        optimizer = preco_optim.Adam(
+            self.pcnet.params,
+            learning_rate=cfg.learning_rate,
+            grad_clip=1.0,
+            batch_scale=False,
+            weight_decay=0.0
+        )
+        self.pcnet.set_optimizer(optimizer)
 
-    def _predict_layer(self, layer_idx: int, x_in: "torch.Tensor") -> Tuple["torch.Tensor", "torch.Tensor"]:
-        return self.layers[layer_idx].predict(x_in)
+    def forward(self, x0: torch.Tensor) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
+        """Run feedforward initialization.
+        
+        Returns states and dummy pre-activations to match the expected interface.
+        """
+        if not isinstance(x0, torch.Tensor):
+            x0 = torch.tensor(x0, device=self.device, dtype=torch.float32)
+        else:
+            x0 = x0.to(self.device, dtype=torch.float32)
 
-    @torch.no_grad()
-    def infer_hidden_states(self, states: List["torch.Tensor"], targets: "torch.Tensor", clamp_output: bool) -> None:
-        if clamp_output:
-            states[-1] = targets.to(self.device, dtype=torch.float32)
+        self.pcnet.reset_nodes()
+        self.pcnet.clamp_input(x0)
+        self.pcnet.forward(self.pcnet.error_layers)
 
-        L = len(self.layers)
-        lr = float(self.cfg.inference_lr)
-
-        for _ in range(int(self.cfg.inference_steps)):
-            for l in range(1, L):
-                # eps_l = x_l - f_{l-1}(W_{l-1} x_{l-1} + b)
-                pred_l, _ = self._predict_layer(l - 1, states[l - 1])
-                eps_l = states[l] - pred_l
-
-                # For the output layer, no higher term
-                if l == L:
-                    states[l] = states[l] - lr * eps_l
-                    continue
-
-                pred_next, u_next = self._predict_layer(l, states[l])
-                eps_next = states[l + 1] - pred_next
-                delta_next = eps_next * self.layers[l].dact(u_next)
-                back_term = delta_next @ self.layers[l].W
-
-                dE_dx = eps_l - back_term
-                states[l] = states[l] - lr * dE_dx
-
-            if clamp_output:
-                states[-1] = targets.to(self.device, dtype=torch.float32)
-
-    @torch.no_grad()
-    def _compute_errors(self, states: List["torch.Tensor"]):
-        L = len(self.layers)
-        eps: List[torch.Tensor] = [torch.empty((states[0].shape[0], 0), device=self.device, dtype=torch.float32)]
-        u_list: List[torch.Tensor] = [torch.empty((states[0].shape[0], 0), device=self.device, dtype=torch.float32)]
-        pred_list: List[torch.Tensor] = [torch.empty((states[0].shape[0], 0), device=self.device, dtype=torch.float32)]
-
-        for l in range(L):
-            pred, u = self._predict_layer(l, states[l])
-            e = states[l + 1] - pred
-            eps.append(e)
-            u_list.append(u)
-            pred_list.append(pred)
-
-        return eps, u_list, pred_list
+        # We return the states list. Pre-activations are returned as dummy list of empty tensors.
+        dummy_u = [torch.empty((x0.shape[0], 0), device=self.device) for _ in range(self.pcnet.L + 1)]
+        return self.pcnet.x, dummy_u
 
     def get_state_dict(self) -> dict:
+        """Returns standard state dict with W_l and b_l as numpy arrays."""
         state = {}
-        for i, layer in enumerate(self.layers):
-            W_np, b_np = layer.get_weights_numpy()
-            state[f"W_{i}"] = W_np
-            state[f"b_{i}"] = b_np
+        for l in range(self.pcnet.L):
+            # Transpose PRECO's (in_dim, out_dim) weight matrix to (out_dim, in_dim)
+            W_np = self.pcnet.w[l].detach().cpu().numpy().T.astype(np.float32)
+            b_np = self.pcnet.b[l].detach().cpu().numpy().astype(np.float32)
+            state[f"W_{l}"] = W_np
+            state[f"b_{l}"] = b_np
         return state
 
     def load_state_dict(self, state: dict) -> None:
-        for i, layer in enumerate(self.layers):
-            W = state[f"W_{i}"]
-            b = state[f"b_{i}"]
+        """Loads state dict with standard (out_dim, in_dim) weight layouts."""
+        for l in range(self.pcnet.L):
+            W = state[f"W_{l}"]
+            b = state[f"b_{l}"]
 
-            if torch is not None and isinstance(W, torch.Tensor):
+            if isinstance(W, torch.Tensor):
                 W = W.detach().cpu().numpy()
-            if torch is not None and isinstance(b, torch.Tensor):
+            if isinstance(b, torch.Tensor):
                 b = b.detach().cpu().numpy()
 
-            layer.set_weights_from_numpy(W, b)
+            # Transpose from standard (out_dim, in_dim) to PRECO's (in_dim, out_dim)
+            self.pcnet.w[l] = torch.tensor(W.T, device=self.device, dtype=torch.float32)
+            self.pcnet.b[l] = torch.tensor(b, device=self.device, dtype=torch.float32)
 
-    @torch.no_grad()
-    def train_on_batch(self, x0, y, sample_weights=None) -> float:
-        if torch is None:
-            raise ImportError("PyTorch is required for PredictiveCodingNetworkTorch")
-
+    def train_on_batch(self, x0: torch.Tensor, y: torch.Tensor, sample_weights: torch.Tensor | None = None) -> float:
+        """Runs iterative inference followed by parameter updates."""
         if not isinstance(x0, torch.Tensor):
             x0 = torch.tensor(x0, device=self.device, dtype=torch.float32)
         else:
@@ -219,53 +129,55 @@ class PredictiveCodingNetworkTorch:
             y = torch.tensor(y, device=self.device, dtype=torch.float32)
         else:
             y = y.to(self.device, dtype=torch.float32)
-            
+
         if y.ndim == 1:
             y = y.view(-1, 1)
 
-        states, _ = self.forward(x0)
-        self.infer_hidden_states(states, targets=y, clamp_output=True)
-        eps, u_list, _ = self._compute_errors(states)
+        # 1. Reset and clamp inputs
+        self.pcnet.reset_nodes()
+        self.pcnet.clamp_input(x0)
+        self.pcnet.init_hidden(x0.shape[0])
+        self.pcnet.clamp_target(y)
 
+        # 2. Run standard iterative inference updates to optimize hidden states
+        self.pcnet.train_updates()
+
+        # 3. Apply sample weights if present
         if sample_weights is not None:
             if not isinstance(sample_weights, torch.Tensor):
                 w = torch.tensor(sample_weights, device=self.device, dtype=torch.float32).view(-1, 1)
             else:
                 w = sample_weights.to(self.device, dtype=torch.float32).view(-1, 1)
-            eps[-1] = eps[-1] * w
+            self.pcnet.e[-1] = self.pcnet.e[-1] * w
 
-        lr = float(self.cfg.learning_rate)
-        batch_size = float(x0.shape[0])
+        # 4. Local weight update
+        self.pcnet.update_w()
+        if not self.pcnet.incremental:
+            self.pcnet.optimizer.step(self.pcnet.params, self.pcnet.grads, batch_size=x0.shape[0])
 
+        # 5. Compute average energy across error layers (to match previous behaviour)
         energy = 0.0
-        for l, layer in enumerate(self.layers):
-            e = eps[l + 1]
-            u = u_list[l + 1]
-            delta = e * layer.dact(u)
-            grad_W = (delta.t() @ states[l]) / batch_size
-            grad_b = delta.mean(dim=0)
-
-            layer.W = (layer.W + lr * grad_W).to(dtype=torch.float32)
-            layer.b = (layer.b + lr * grad_b).to(dtype=torch.float32)
-
+        for l in self.pcnet.error_layers:
+            e = self.pcnet.e[l]
             energy += 0.5 * float((e * e).mean().item())
 
-        return float(energy)
+        return energy
 
-    @torch.no_grad()
-    def predict_proba_torch(self, x0) -> "torch.Tensor":
-        if torch is None:
-            raise ImportError("PyTorch is required for PredictiveCodingNetworkTorch")
-
+    def predict_proba_torch(self, x0: torch.Tensor) -> torch.Tensor:
+        """Directly predict probabilities as PyTorch Tensor."""
         if not isinstance(x0, torch.Tensor):
             x0 = torch.tensor(x0, device=self.device, dtype=torch.float32)
         else:
             x0 = x0.to(self.device, dtype=torch.float32)
 
-        states, _ = self.forward(x0)
-        out = states[-1].view(-1)
+        self.pcnet.reset_nodes()
+        self.pcnet.clamp_input(x0)
+        self.pcnet.forward(self.pcnet.error_layers)
+
+        # Under the PCN_MBA structure, output states[-1] is already filtered by fL (sigmoid)
+        out = self.pcnet.x[-1].view(-1)
         return out.clamp(1e-7, 1.0 - 1e-7)
 
-    @torch.no_grad()
-    def predict_proba(self, x0) -> np.ndarray:
+    def predict_proba(self, x0: torch.Tensor) -> np.ndarray:
+        """Predict win probabilities as numpy array."""
         return self.predict_proba_torch(x0).detach().cpu().numpy().astype(np.float32)

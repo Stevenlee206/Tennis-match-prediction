@@ -24,9 +24,10 @@ from src.continual_learning_benchmark.models_setup import (
 )
 from src.continual_learning_benchmark.feature_importance import calculate_permutation_importance, plot_feature_importance
 from src.continual_learning_benchmark.utils import TeeLogger
+from src.models.utils.metrics import binary_classification_metrics
 
 ###
-TRIALS = 20 # 20
+TRIALS = 20 # 10
 EPOCHS = 100 # 100
 PLAYERS = 5
 PATIENCE = 10
@@ -233,24 +234,23 @@ def run_benchmark():
                 model, rolling_history = train_online_stream(model_type, input_dim, X_test, y_test, best_params, batch_size=50, base_weights_path=base_weights)
                 plot_streaming_accuracy(rolling_history, f'{model_type.upper()} ULTIMATE Streaming Acc (Test Set)', os.path.join(mode_dir, 'streaming_acc.png'))
                 
-                # We extract the predicted labels from the rolling history
-                probs = np.array(rolling_history['rolling_accuracy']) # This doesn't matter, we only care about metrics. 
-                # Actually, wait, evaluate_model_bias expects probabilities to compute y_pred.
-                # Ultimate streaming doesn't use static probs on X_test. We must intercept the predictions.
-                # So we can't just pass `probs`.
-                # We will just evaluate differently or mock the probs for the ultimate streaming case.
-                
-                # Since we already evaluated it in train_online_stream, let's just log the final acc.
-                all_results[model_type][mode] = {
-                    "bias_metrics": {"final_accuracy": rolling_history['cumulative_accuracy'][-1] * 100},
-                    "player_metrics": {}
-                }
-                print(f"Ultimate Streaming X_test Cumulative Accuracy: {rolling_history['cumulative_accuracy'][-1]:.4f}")
-                continue # Skip standard evaluation since it's already evaluated during stream
+                # Use raw probability predictions collected during the stream for standard evaluation
+                probs = np.array(rolling_history['all_probs'])
                 
             # Standard Evaluation
             y_pred = (probs >= 0.5).astype(int)
             bias_m = evaluate_model_bias(y_test, y_pred, raw_test, dataset_name=f"{mode.upper()} {model_type.upper()}")
+            
+            # Incorporate detailed classification metrics (Brier, Log Loss, etc.)
+            detailed_metrics = binary_classification_metrics(y_test, probs)
+            
+            print("\n--- DETAILED CLASSIFICATION METRICS ---")
+            for metric_name, metric_value in detailed_metrics.items():
+                print(f"{metric_name.ljust(20)}: {metric_value:.4f}")
+            print("-" * 39 + "\n")
+            
+            bias_m.update({k: round(v, 4) if isinstance(v, float) else v for k, v in detailed_metrics.items()})
+            
             player_m = evaluate_player_metrics(y_test, y_pred, raw_test, selected_players)
             
             print(f"Calculating Permutation Feature Importance for {model_type.upper()} {mode.upper()}...")

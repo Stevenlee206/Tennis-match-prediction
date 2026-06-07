@@ -297,9 +297,10 @@ def train_online_stream(model_type, input_dim, X: np.ndarray, y: np.ndarray, bes
     if base_weights_path and os.path.exists(base_weights_path):
         print(f"Loaded base {model_type.upper()} weights for Online Streaming from {base_weights_path}")
 
-    rolling_history = {'rolling_accuracy': [], 'cumulative_accuracy': [], 'batch_losses': []}
+    rolling_history = {'rolling_accuracy': [], 'cumulative_accuracy': [], 'batch_losses': [], 'all_probs': []}
     all_y_pred = []
     all_y_true = []
+    all_probs = []
     
     from sklearn.metrics import accuracy_score
     
@@ -314,6 +315,7 @@ def train_online_stream(model_type, input_dim, X: np.ndarray, y: np.ndarray, bes
         
         all_y_pred.extend(y_pred)
         all_y_true.extend(y_b)
+        all_probs.extend(probs)
         
         batch_acc = accuracy_score(y_b, y_pred)
         rolling_history['rolling_accuracy'].append(batch_acc)
@@ -325,5 +327,6 @@ def train_online_stream(model_type, input_dim, X: np.ndarray, y: np.ndarray, bes
         loss = wrapper.train_on_batch(X_b, y_b)
         rolling_history['batch_losses'].append(loss)
         
+    rolling_history['all_probs'] = np.array(all_probs)
     print(f"Final Cumulative Stream Accuracy: {rolling_history['cumulative_accuracy'][-1]:.4f}")
     return wrapper, rolling_history

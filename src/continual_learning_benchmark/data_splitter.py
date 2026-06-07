@@ -136,11 +136,11 @@ def get_benchmark_splits(data: pd.DataFrame, train_split_idx: int, pre_2025_coun
     total_2025_matches = idx_2026_start - idx_2025_start
     total_2026_matches = len(data) - idx_2026_start
     
-    # D_Mean: remaining 10% of pre-2025 + 90% of 2025
-    idx_mean_end = idx_2025_start + int(0.90 * total_2025_matches) if total_2025_matches > 0 else idx_2026_start
+    # D_Mean: remaining 10% of pre-2025 + all 2025 + 50% of 2026
+    idx_mean_end = idx_2026_start + int(0.50 * total_2026_matches) if total_2026_matches > 0 else len(data)
     
-    # D_Test: remaining 10% of 2025 + 50% of 2026
-    idx_test_end = idx_2026_start + int(0.50 * total_2026_matches) if total_2026_matches > 0 else len(data)
+    # D_Test: remaining 50% of 2026
+    idx_test_end = len(data)
     
     D_Mean = data.iloc[train_split_idx:idx_mean_end].copy()
     D_Test = data.iloc[idx_mean_end:idx_test_end].copy()

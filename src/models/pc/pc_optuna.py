@@ -16,6 +16,10 @@ from importlib import import_module
 import torch
 import torch.nn.functional as F
 
+from src.models.predictive_coding.pc_network import PCNetworkConfig
+from src.models.predictive_coding.pc_network_torch import PredictiveCodingNetworkTorch
+from src.models.utils.metrics import binary_classification_metrics
+
 # Re-use bias metric and weight generation
 def generate_sample_weights(X_train, y_train, weight_strategy="none", upset_weight=1.0):
     if weight_strategy == "none":
@@ -26,10 +30,6 @@ def generate_sample_weights(X_train, y_train, weight_strategy="none", upset_weig
         upsets = (X_train['elo_diff'] > 0) != y_train
         weights[upsets] = upset_weight
     return weights
-
-from src.models.predictive_coding.pc_network import PCNetworkConfig
-from src.models.predictive_coding.pc_network_torch import PredictiveCodingNetworkTorch
-from src.models.utils.metrics import binary_classification_metrics
 
 def plot_optuna_history(study, save_path):
     plt.figure(figsize=(10, 6))
