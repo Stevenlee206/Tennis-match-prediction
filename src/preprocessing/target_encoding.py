@@ -31,6 +31,18 @@ def create_target(df: pd.DataFrame, random_state: int = 42, augment: bool = True
         np.random.seed(random_state)
         p1_is_winner = np.random.randint(0, 2, size=len(data)).astype(bool)
         sign = np.where(p1_is_winner, 1, -1)
+
+    # Preserve the randomized player perspective for player-centric evaluation.
+    if {'winner_id', 'loser_id'}.issubset(data.columns):
+        data['player_1_id'] = np.where(p1_is_winner, data['winner_id'], data['loser_id'])
+        data['player_2_id'] = np.where(p1_is_winner, data['loser_id'], data['winner_id'])
+    if {'winner_name', 'loser_name'}.issubset(data.columns):
+        data['player_1_name'] = np.where(p1_is_winner, data['winner_name'], data['loser_name'])
+        data['player_2_name'] = np.where(p1_is_winner, data['loser_name'], data['winner_name'])
+    if {'winner_elo', 'loser_elo'}.issubset(data.columns):
+        data['elo_1'] = np.where(p1_is_winner, data['winner_elo'], data['loser_elo'])
+        data['elo_2'] = np.where(p1_is_winner, data['loser_elo'], data['winner_elo'])
+        data['p_elo'] = 1.0 / (1.0 + 10.0 ** ((data['elo_2'] - data['elo_1']) / 400.0))
     # =========================
     # 1. Diff features (Needs W and L columns)
     # =========================

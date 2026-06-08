@@ -1,0 +1,99 @@
+{
+    "model_type": "PredictiveCoding",
+    "optimizer": "optuna",
+    "best_params": {
+        "learning_rate": 0.00044633848121370106,
+        "inference_lr": 0.003375745195726791,
+        "inference_steps": 26,
+        "hidden_activation": "relu",
+        "random_seed": 42
+    },
+    "model_params": {
+        "depth": 3,
+        "width": 64,
+        "hidden_sizes": [
+            64,
+            64,
+            64
+        ],
+        "training_params": {
+            "batch_size": 64,
+            "epochs": 50,
+            "weight_strategy": "none"
+        }
+    },
+    "evaluation": {
+        "best_epoch": 13,
+        "test_accuracy": 0.6815454363822937,
+        "training_time_seconds": 251.85549964999973
+    },
+    "features_used": [
+        "best_of",
+        "rank_diff",
+        "rank_points_diff",
+        "age_diff",
+        "height_diff",
+        "same_hand_flag",
+        "month",
+        "day_of_year",
+        "month_sin",
+        "month_cos",
+        "day_sin",
+        "day_cos",
+        "elo_diff",
+        "elo_hard_diff",
+        "elo_clay_diff",
+        "elo_grass_diff",
+        "glicko2_diff",
+        "glicko2_hard_diff",
+        "glicko2_clay_diff",
+        "glicko2_grass_diff",
+        "form_diff",
+        "hand_win_pct_diff",
+        "ace_vs_df_diff",
+        "first_in_diff",
+        "first_won_diff",
+        "second_won_diff",
+        "fatigue_diff",
+        "clutch_diff",
+        "p1_h2h_rate",
+        "p2_h2h_rate",
+        "surface_Carpet",
+        "surface_Clay",
+        "surface_Grass",
+        "surface_Hard",
+        "tourney_level_A",
+        "tourney_level_D",
+        "tourney_level_F",
+        "tourney_level_G",
+        "tourney_level_M",
+        "round_BR",
+        "round_F",
+        "round_QF",
+        "round_R128",
+        "round_R16",
+        "round_R32",
+        "round_R64",
+        "round_RR",
+        "round_SF"
+    ],
+    "bias_metrics": {
+        "final_test_eval": {
+            "class_1_prediction_rate": 48.39,
+            "elo_reliance": 83.26,
+            "elo_baseline_accuracy": 64.06,
+            "upset_prediction_accuracy": 24.81,
+            "rank_reliance": 81.69,
+            "final_accuracy": 65.16,
+            "accuracy": 0.6515775034293553,
+            "balanced_accuracy": 0.6514837819185645,
+            "precision": 0.6534372785258682,
+            "recall": 0.6363008971704623,
+            "f1": 0.6447552447552447,
+            "roc_auc": 0.7198029997887738,
+            "pr_auc": 0.7059068458632024,
+            "log_loss": 0.6165490441810986,
+            "brier": 0.21280129642252882
+        }
+    }
+}

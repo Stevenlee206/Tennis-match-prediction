@@ -24,6 +24,12 @@ from src.continual_learning_benchmark.models_setup import (
 )
 from src.continual_learning_benchmark.feature_importance import calculate_permutation_importance, plot_feature_importance
 from src.continual_learning_benchmark.utils import TeeLogger
+from src.continual_learning_benchmark.adaptation_metrics import (
+    generate_metric_plots,
+    generate_metric_tables,
+    print_adaptation_interpretation,
+)
+from src.continual_learning_benchmark.player_elo_adaptation import generate_player_elo_tables
 from src.models.utils.metrics import binary_classification_metrics
 
 ###
@@ -97,12 +103,228 @@ def plot_final_metrics_bar(all_results, save_dir):
 def prep_xy(df):
     df_clean = df.copy()
     raw = df.copy()
-    drop_cols = ['target', 'year', 'is_augmented', 'winner_name', 'loser_name', 'winner_ioc', 'loser_ioc', 'score', 'tourney_date', 'winner_elo', 'loser_elo']
+    drop_cols = [
+        'target', 'year', 'is_augmented', 'winner_name', 'loser_name', 'winner_ioc', 'loser_ioc',
+        'score', 'tourney_date', 'winner_elo', 'loser_elo', 'player_1_id', 'player_2_id',
+        'player_1_name', 'player_2_name', 'elo_1', 'elo_2', 'p_elo',
+        'player_1_elo_delta', 'player_2_elo_delta', 'player_1_elo_group', 'player_2_elo_group',
+        'player_1_elo_quantile', 'player_2_elo_quantile', 'player_1_trend_group', 'player_2_trend_group',
+    ]
     X = df_clean.drop(columns=drop_cols, errors='ignore').fillna(0)
     features = X.columns.tolist()
     X = X.values
     y = df_clean['target'].values if 'target' in df_clean.columns else np.zeros(len(df_clean))
     return X, y, raw, features
+
+def get_static_upset_weights(raw_df, upset_weight=1.5):
+    weights = np.ones(len(raw_df))
+    if 'elo_diff' in raw_df.columns and 'target' in raw_df.columns:
+        upsets = (raw_df['elo_diff'] > 0).values != raw_df['target'].values
+        weights[upsets] = upset_weight
+    return weights
+
+def build_prediction_records(raw_df, y_true, y_prob, model_name, mode, prediction_before_update=False):
+    records = pd.DataFrame({
+        "match_id": raw_df.index.to_numpy() if raw_df is not None else np.arange(len(y_true)),
+        "model_name": model_name,
+        "mode": mode,
+        "y_true": np.asarray(y_true).astype(int),
+        "y_prob": np.clip(np.asarray(y_prob, dtype=float), 1e-15, 1 - 1e-15),
+    })
+    records["y_pred"] = (records["y_prob"] >= 0.5).astype(int)
+    records["prediction_before_update"] = bool(prediction_before_update)
+
+    if raw_df is None:
+        return records
+
+    optional_cols = [
+        "tourney_date",
+        "season",
+        "surface",
+        "tourney_name",
+        "tournament",
+        "tourney_level",
+        "round",
+        "winner_id",
+        "loser_id",
+        "player_1_id",
+        "player_2_id",
+        "player_1_name",
+        "player_2_name",
+        "elo_1",
+        "elo_2",
+        "p_elo",
+        "player_1_elo_delta",
+        "player_2_elo_delta",
+        "player_1_elo_group",
+        "player_2_elo_group",
+        "player_1_elo_quantile",
+        "player_2_elo_quantile",
+        "player_1_trend_group",
+        "player_2_trend_group",
+        "elo_diff",
+        "rank_diff",
+        "elo_pred",
+        "rank_pred",
+        "favorite_label",
+        "is_upset",
+        "update_time",
+        "update_time_ms",
+        "num_updated_params",
+        "update_step",
+        "online_step",
+    ]
+    for col in optional_cols:
+        if col in raw_df.columns:
+            records[col] = raw_df[col].to_numpy()
+
+    if "tourney_date" in records.columns:
+        records["date"] = records["tourney_date"]
+        records["test_year"] = pd.to_datetime(records["tourney_date"], errors="coerce").dt.year
+    elif "season" in records.columns and "test_year" not in records.columns:
+        records["test_year"] = records["season"]
+
+    if "tourney_name" in records.columns and "tournament" not in records.columns:
+        records["tournament"] = records["tourney_name"]
+    if "winner_id" in records.columns and "player_1_id" not in records.columns:
+        print("Warning: player_1_id/player_2_id unavailable; winner/loser fallback may not match randomized target perspective.")
+        records["player_1_id"] = records["winner_id"]
+        records["player_2_id"] = records["loser_id"]
+    if "elo_pred" not in records.columns and "elo_diff" in records.columns:
+        records["elo_pred"] = (pd.to_numeric(records["elo_diff"], errors="coerce") > 0).astype(int)
+    if "rank_pred" not in records.columns and "rank_diff" in records.columns:
+        records["rank_pred"] = (pd.to_numeric(records["rank_diff"], errors="coerce") < 0).astype(int)
+    if "is_upset" not in records.columns and "elo_pred" in records.columns:
+        records["is_upset"] = records["y_true"].astype(int) != records["elo_pred"].astype(int)
+    return records
+
+def print_adaptation_table_preview(tables):
+    preview_specs = [
+        (
+            "executive_summary_table",
+            [
+                "question",
+                "evidence",
+                "conclusion",
+                "recommended_claim",
+            ],
+        ),
+        (
+            "adaptation_metrics_table",
+            [
+                "model",
+                "Static Accuracy",
+                "Online Accuracy",
+                "Ultimate Streaming Accuracy",
+                "Online Adaptation Gain",
+                "Ultimate Streaming Adaptation Gain",
+                "Relative Ultimate Streaming Gain",
+                "Retrain Gap",
+                "Adaptation Gain Advantage over NN",
+            ],
+        ),
+        (
+            "prequential_metrics_table",
+            [
+                "model",
+                "mode",
+                "prequential_accuracy",
+                "prequential_log_loss",
+                "prequential_brier",
+                "time_weighted_accuracy",
+                "time_weighted_log_loss",
+                "time_weighted_brier",
+            ],
+        ),
+        (
+            "streaming_comparison_table",
+            [
+                "comparison",
+                "mode",
+                "PCN_Streaming_Advantage_accuracy",
+                "PCN_Streaming_Advantage_log_loss",
+                "PCN_Streaming_Advantage_brier",
+                "PCN_Adaptation_Gain_Advantage_accuracy",
+                "PCN_Adaptation_Gain_Advantage_log_loss",
+            ],
+        ),
+    ]
+
+    print("\n" + "=" * 50)
+    print(" ADAPTATION METRICS SUMMARY")
+    print("=" * 50)
+    for table_name, columns in preview_specs:
+        table = tables.get(table_name)
+        if table is None or table.empty:
+            print(f"\n[{table_name}] skipped or empty.")
+            continue
+        visible_cols = [c for c in columns if c in table.columns]
+        print(f"\n[{table_name}]")
+        print(table[visible_cols].to_string(index=False))
+    print("=" * 50 + "\n")
+
+def print_player_elo_table_preview(tables):
+    if not tables:
+        print("\n[PLAYER ELO ADAPTATION] skipped: required player/Elo columns were unavailable.\n")
+        return
+
+    preview_specs = [
+        (
+            "pcn_elo_continual_advantage_table",
+            ["metric", "group", "mode", "PCN value", "NN value", "PCN advantage"],
+        ),
+        (
+            "elo_conditioned_adaptation_gain_table",
+            [
+                "model_name",
+                "adaptive_mode",
+                "group_type",
+                "elo_group",
+                "elo_pag_accuracy",
+                "elo_pag_logloss",
+                "elo_pag_brier",
+                "n_matches",
+            ],
+        ),
+        (
+            "elo_residual_gain_table",
+            [
+                "model_name",
+                "mode",
+                "group_type",
+                "elo_group",
+                "EloResidualGain_LL",
+                "EloResidualGain_Brier",
+                "n_matches",
+            ],
+        ),
+        (
+            "elo_disagreement_adaptation_table",
+            [
+                "model_name",
+                "mode",
+                "group_type",
+                "elo_group",
+                "elo_disagreement_rate",
+                "acc_disagree_elo",
+                "disagree_gain_accuracy",
+                "n_disagree",
+            ],
+        ),
+    ]
+
+    print("\n" + "=" * 50)
+    print(" PLAYER-CENTRIC ELO ADAPTATION SUMMARY")
+    print("=" * 50)
+    for table_name, columns in preview_specs:
+        table = tables.get(table_name)
+        if table is None or table.empty:
+            print(f"\n[{table_name}] skipped or empty.")
+            continue
+        visible_cols = [c for c in columns if c in table.columns]
+        print(f"\n[{table_name}]")
+        print(table[visible_cols].head(30).to_string(index=False))
+    print("=" * 50 + "\n")
 
 def run_benchmark():
     parser = argparse.ArgumentParser(description="Continual Learning Benchmark")
@@ -111,6 +333,8 @@ def run_benchmark():
     parser.add_argument("--run_finetune", action="store_true", help="Run Finetune mode")
     parser.add_argument("--run_retrain", action="store_true", help="Run Retrain mode")
     parser.add_argument("--run_online", action="store_true", help="Run Online and Ultimate Streaming modes")
+    parser.add_argument("--weight_strategy", type=str, choices=["none", "static"], default="none", help="Weight strategy to use")
+    parser.add_argument("--bootstrap_resamples", type=int, default=1000, help="Bootstrap resamples for metric confidence intervals")
     args = parser.parse_args()
 
     if not (args.run_all or args.run_static or args.run_finetune or args.run_retrain or args.run_online):
@@ -136,6 +360,7 @@ def run_benchmark():
     print(f"==================================================")
     print(f" CONTINUAL LEARNING BENCHMARK V2 STARTED")
     print(f" Modes: {modes_to_run}")
+    print(f" Weight Strategy: {args.weight_strategy}")
     print(f" Run Directory: {run_dir}")
     print(f"==================================================\n")
 
@@ -162,8 +387,21 @@ def run_benchmark():
     X_base_mean = np.vstack([X_base, X_mean])
     y_base_mean = np.concatenate([y_base, y_mean])
 
+    # Compute static upset weights for all splits using raw dfs if selected
+    if args.weight_strategy == "static":
+        w_base = get_static_upset_weights(raw_base, upset_weight=1.5)
+        w_mean = get_static_upset_weights(raw_mean, upset_weight=1.5)
+        w_test = get_static_upset_weights(raw_test, upset_weight=1.5)
+        w_base_mean = np.concatenate([w_base, w_mean])
+    else:
+        w_base = None
+        w_mean = None
+        w_test = None
+        w_base_mean = None
+
     models_to_run = ["nn", "pcn"]
     all_results = {}
+    prediction_records = []
 
     for model_type in models_to_run:
         all_results[model_type] = {}
@@ -207,7 +445,11 @@ def run_benchmark():
             if mode == "static":
                 X_train_pool, y_train_pool = X_base, y_base
                 base_weights = None
-                model, history = train_model_full(model_type, input_dim, X_train_pool, y_train_pool, best_params, epochs=opt_epochs, batch_size=64, base_weights_path=base_weights)
+                model, history = train_model_full(
+                    model_type, input_dim, X_train_pool, y_train_pool, best_params, 
+                    epochs=opt_epochs, batch_size=64, base_weights_path=base_weights, 
+                    sample_weights=w_base
+                )
                 plot_learning_curves(history, f'{model_type.upper()} STATIC Learning Curves', os.path.join(mode_dir, 'learning_curves.png'))
                 
                 # Save
@@ -218,21 +460,32 @@ def run_benchmark():
             elif mode == "finetune":
                 X_train_pool, y_train_pool = X_mean, y_mean
                 base_weights = static_weights_path
-                model, history = train_model_full(model_type, input_dim, X_train_pool, y_train_pool, best_params, epochs=opt_epochs, batch_size=64, base_weights_path=base_weights)
+                model, history = train_model_full(
+                    model_type, input_dim, X_train_pool, y_train_pool, best_params, 
+                    epochs=opt_epochs, batch_size=64, base_weights_path=base_weights, 
+                    sample_weights=w_mean
+                )
                 plot_learning_curves(history, f'{model_type.upper()} FINETUNE Learning Curves', os.path.join(mode_dir, 'learning_curves.png'))
                 probs = model.predict_proba(X_test)
                 
             elif mode == "retrain":
                 X_train_pool, y_train_pool = X_base_mean, y_base_mean
                 base_weights = None
-                model, history = train_model_full(model_type, input_dim, X_train_pool, y_train_pool, best_params, epochs=opt_epochs, batch_size=64, base_weights_path=base_weights)
+                model, history = train_model_full(
+                    model_type, input_dim, X_train_pool, y_train_pool, best_params, 
+                    epochs=opt_epochs, batch_size=64, base_weights_path=base_weights, 
+                    sample_weights=w_base_mean
+                )
                 plot_learning_curves(history, f'{model_type.upper()} RETRAIN Learning Curves', os.path.join(mode_dir, 'learning_curves.png'))
                 probs = model.predict_proba(X_test)
                 
             elif mode == "online":
                 base_weights = static_weights_path
                 # Train and Test interleaved
-                model, rolling_history = train_online_stream(model_type, input_dim, X_mean, y_mean, best_params, batch_size=50, base_weights_path=base_weights)
+                model, rolling_history = train_online_stream(
+                    model_type, input_dim, X_mean, y_mean, best_params, 
+                    batch_size=50, base_weights_path=base_weights, sample_weights=w_mean
+                )
                 plot_streaming_accuracy(rolling_history, f'{model_type.upper()} ONLINE Streaming Acc', os.path.join(mode_dir, 'streaming_acc.png'))
                 
                 # Save online weights
@@ -240,15 +493,23 @@ def run_benchmark():
                 
                 # Evaluate frozen weights on X_test for fair comparison
                 probs = model.predict_proba(X_test)
+                print("Online mode note: prequential predictions are available for D_Mean, while D_Test is evaluated with frozen post-online weights.")
                 
             elif mode == "ultimate_streaming":
-                base_weights = online_weights_path
-                # Stream through X_test
-                model, rolling_history = train_online_stream(model_type, input_dim, X_test, y_test, best_params, batch_size=50, base_weights_path=base_weights)
-                plot_streaming_accuracy(rolling_history, f'{model_type.upper()} ULTIMATE Streaming Acc (Test Set)', os.path.join(mode_dir, 'streaming_acc.png'))
+                base_weights = static_weights_path
+                # Stream through both X_mean and X_test combined
+                X_mean_test = np.vstack([X_mean, X_test])
+                y_mean_test = np.concatenate([y_mean, y_test])
+                w_mean_test = np.concatenate([w_mean, w_test]) if w_mean is not None else None
                 
-                # Use raw probability predictions collected during the stream for standard evaluation
-                probs = np.array(rolling_history['all_probs'])
+                model, rolling_history = train_online_stream(
+                    model_type, input_dim, X_mean_test, y_mean_test, best_params, 
+                    batch_size=50, base_weights_path=base_weights, sample_weights=w_mean_test
+                )
+                plot_streaming_accuracy(rolling_history, f'{model_type.upper()} ULTIMATE Streaming Acc (Mean + Test Set)', os.path.join(mode_dir, 'streaming_acc.png'))
+                
+                # Slice test probs (from len(X_mean) to end)
+                probs = rolling_history['all_probs'][len(X_mean):]
                 
             # Standard Evaluation
             y_pred = (probs >= 0.5).astype(int)
@@ -275,6 +536,16 @@ def run_benchmark():
                 "bias_metrics": bias_m,
                 "player_metrics": player_m
             }
+            prediction_records.append(
+                build_prediction_records(
+                    raw_test,
+                    y_test,
+                    probs,
+                    model_type,
+                    mode,
+                    prediction_before_update=(mode == "ultimate_streaming"),
+                )
+            )
             
     metrics_file = os.path.join(run_dir, "metrics.json")
     with open(metrics_file, "w", encoding="utf-8") as f:
@@ -282,6 +553,22 @@ def run_benchmark():
         
     print(f"\nGenerating Final Visualizations...")
     plot_final_metrics_bar(all_results, run_dir)
+    if prediction_records:
+        adaptation_dir = os.path.join(run_dir, "adaptation_metrics")
+        prediction_df = pd.concat(prediction_records, ignore_index=True)
+        print(f"Generating adaptation-oriented tables and plots in: {adaptation_dir}")
+        adaptation_tables = generate_metric_tables(
+            prediction_df,
+            adaptation_dir,
+            bootstrap_resamples=args.bootstrap_resamples,
+        )
+        generate_metric_plots(adaptation_tables, adaptation_dir)
+        print_adaptation_table_preview(adaptation_tables)
+        print_adaptation_interpretation(adaptation_tables)
+        player_elo_dir = os.path.join(adaptation_dir, "player_elo_adaptation")
+        print(f"Generating player-centric Elo adaptation metrics in: {player_elo_dir}")
+        player_elo_tables = generate_player_elo_tables(prediction_df, player_elo_dir)
+        print_player_elo_table_preview(player_elo_tables)
     print(f"All outputs saved to: {run_dir}")
     
     if isinstance(sys.stdout, TeeLogger):

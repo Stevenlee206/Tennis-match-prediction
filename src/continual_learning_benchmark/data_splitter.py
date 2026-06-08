@@ -90,6 +90,12 @@ class BenchmarkDataPipeline(Preprocessing):
         dates = data['tourney_date'].copy()
         w_elos = data['winner_elo'].copy() if 'winner_elo' in data.columns else None
         l_elos = data['loser_elo'].copy() if 'loser_elo' in data.columns else None
+        player_elo_metadata_cols = [
+            'player_1_id', 'player_2_id', 'player_1_name', 'player_2_name', 'elo_1', 'elo_2', 'p_elo',
+            'player_1_elo_delta', 'player_2_elo_delta', 'player_1_elo_group', 'player_2_elo_group',
+            'player_1_elo_quantile', 'player_2_elo_quantile', 'player_1_trend_group', 'player_2_trend_group',
+        ]
+        player_elo_metadata = data[[c for c in player_elo_metadata_cols if c in data.columns]].copy()
         
         data = remove_leaky_columns(data)
         data = remove_unused_data(data)
@@ -105,6 +111,8 @@ class BenchmarkDataPipeline(Preprocessing):
         if w_elos is not None:
             data['winner_elo'] = w_elos
             data['loser_elo'] = l_elos
+        for col in player_elo_metadata.columns:
+            data[col] = player_elo_metadata[col]
             
         nan_cols = data.columns[data.isna().any()].tolist()
         if nan_cols:
@@ -136,15 +144,16 @@ def get_benchmark_splits(data: pd.DataFrame, train_split_idx: int, pre_2025_coun
     total_2025_matches = idx_2026_start - idx_2025_start
     total_2026_matches = len(data) - idx_2026_start
     
-    # D_Mean: remaining 10% of pre-2025 + all 2025 + 50% of 2026
-    idx_mean_end = idx_2026_start + int(0.50 * total_2026_matches) if total_2026_matches > 0 else len(data)
+    # # D_Mean: remaining 10% of pre-2025 + all 2025 + 50% of 2026
+    # idx_mean_end = idx_2026_start + int(0.50 * total_2026_matches) if total_2026_matches > 0 else len(data)
+    idx_mean_end = idx_2026_start - int(0.50 * total_2025_matches) # --> remain: 100% 2026 + 50% last 2025
     
     # D_Test: remaining 50% of 2026
     idx_test_end = len(data)
     
     D_Mean = data.iloc[train_split_idx:idx_mean_end].copy()
     D_Test = data.iloc[idx_mean_end:idx_test_end].copy()
-    D_Holdout = data.iloc[idx_test_end:].copy()
+    D_Holdout = data.iloc[idx_test_end:].copy() # holdout = 0
     
     # Ensure no augmented rows in evaluation sets
     if 'is_augmented' in D_Test.columns:

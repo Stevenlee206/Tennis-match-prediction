@@ -1,0 +1,876 @@
+{
+    "nn": {
+        "static": {
+            "bias_metrics": {
+                "class_1_prediction_rate": 50.42,
+                "elo_reliance": 86.39,
+                "elo_baseline_accuracy": 64.2,
+                "upset_prediction_accuracy": 20.19,
+                "rank_reliance": 81.01,
+                "final_accuracy": 65.04,
+                "accuracy": 0.6504,
+                "balanced_accuracy": 0.6512,
+                "precision": 0.62,
+                "recall": 0.6643,
+                "f1": 0.6414,
+                "roc_auc": 0.7316,
+                "pr_auc": 0.7248,
+                "log_loss": 0.6049,
+                "brier": 0.2097
+            },
+            "player_metrics": {
+                "Alexander Zverev": {
+                    "Accuracy": 92.31,
+                    "Recall": 90.91,
+                    "Precision": 90.91,
+                    "Matches": 26
+                },
+                "Novak Djokovic": {
+                    "Accuracy": 50.0,
+                    "Recall": 100.0,
+                    "Precision": 50.0,
+                    "Matches": 4
+                },
+                "Daniil Medvedev": {
+                    "Accuracy": 70.59,
+                    "Recall": 62.5,
+                    "Precision": 71.43,
+                    "Matches": 17
+                },
+                "Grigor Dimitrov": {
+                    "Accuracy": 50.0,
+                    "Recall": 50.0,
+                    "Precision": 50.0,
+                    "Matches": 4
+                },
+                "Andrey Rublev": {
+                    "Accuracy": 76.92,
+                    "Recall": 100.0,
+                    "Precision": 66.67,
+                    "Matches": 13
+                },
+                "Nikoloz Basilashvili": {
+                    "Accuracy": 57.14,
+                    "Recall": 75.0,
+                    "Precision": 60.0,
+                    "Matches": 7
+                },
+                "Joao Fonseca": {
+                    "Accuracy": 85.71,
+                    "Recall": 100.0,
+                    "Precision": 71.43,
+                    "Matches": 14
+                },
+                "Learner Tien": {
+                    "Accuracy": 57.14,
+                    "Recall": 25.0,
+                    "Precision": 25.0,
+                    "Matches": 14
+                },
+                "Jannik Sinner": {
+                    "Accuracy": 96.43,
+                    "Recall": 100.0,
+                    "Precision": 93.75,
+                    "Matches": 28
+                },
+                "Carlos Alcaraz": {
+                    "Accuracy": 76.92,
+                    "Recall": 71.43,
+                    "Precision": 83.33,
+                    "Matches": 13
+                },
+                "Stan Wawrinka": {
+                    "Accuracy": 100.0,
+                    "Recall": 100.0,
+                    "Precision": 100.0,
+                    "Matches": 4
+                }
+            }
+        },
+        "finetune": {
+            "bias_metrics": {
+                "class_1_prediction_rate": 49.92,
+                "elo_reliance": 86.55,
+                "elo_baseline_accuracy": 64.2,
+                "upset_prediction_accuracy": 20.66,
+                "rank_reliance": 80.5,
+                "final_accuracy": 65.55,
+                "accuracy": 0.6555,
+                "balanced_accuracy": 0.656,
+                "precision": 0.6263,
+                "recall": 0.6643,
+                "f1": 0.6447,
+                "roc_auc": 0.7282,
+                "pr_auc": 0.7206,
+                "log_loss": 0.6054,
+                "brier": 0.2102
+            },
+            "player_metrics": {
+                "Alexander Zverev": {
+                    "Accuracy": 92.31,
+                    "Recall": 90.91,
+                    "Precision": 90.91,
+                    "Matches": 26
+                },
+                "Novak Djokovic": {
+                    "Accuracy": 50.0,
+                    "Recall": 100.0,
+                    "Precision": 50.0,
+                    "Matches": 4
+                },
+                "Daniil Medvedev": {
+                    "Accuracy": 70.59,
+                    "Recall": 62.5,
+                    "Precision": 71.43,
+                    "Matches": 17
+                },
+                "Grigor Dimitrov": {
+                    "Accuracy": 50.0,
+                    "Recall": 50.0,
+                    "Precision": 50.0,
+                    "Matches": 4
+                },
+                "Andrey Rublev": {
+                    "Accuracy": 76.92,
+                    "Recall": 100.0,
+                    "Precision": 66.67,
+                    "Matches": 13
+                },
+                "Nikoloz Basilashvili": {
+                    "Accuracy": 57.14,
+                    "Recall": 75.0,
+                    "Precision": 60.0,
+                    "Matches": 7
+                },
+                "Joao Fonseca": {
+                    "Accuracy": 78.57,
+                    "Recall": 100.0,
+                    "Precision": 62.5,
+                    "Matches": 14
+                },
+                "Learner Tien": {
+                    "Accuracy": 64.29,
+                    "Recall": 25.0,
+                    "Precision": 33.33,
+                    "Matches": 14
+                },
+                "Jannik Sinner": {
+                    "Accuracy": 96.43,
+                    "Recall": 100.0,
+                    "Precision": 93.75,
+                    "Matches": 28
+                },
+                "Carlos Alcaraz": {
+                    "Accuracy": 76.92,
+                    "Recall": 71.43,
+                    "Precision": 83.33,
+                    "Matches": 13
+                },
+                "Stan Wawrinka": {
+                    "Accuracy": 100.0,
+                    "Recall": 100.0,
+                    "Precision": 100.0,
+                    "Matches": 4
+                }
+            }
+        },
+        "retrain": {
+            "bias_metrics": {
+                "class_1_prediction_rate": 47.39,
+                "elo_reliance": 87.73,
+                "elo_baseline_accuracy": 64.2,
+                "upset_prediction_accuracy": 18.78,
+                "rank_reliance": 82.02,
+                "final_accuracy": 65.38,
+                "accuracy": 0.6538,
+                "balanced_accuracy": 0.6528,
+                "precision": 0.6312,
+                "recall": 0.6357,
+                "f1": 0.6335,
+                "roc_auc": 0.732,
+                "pr_auc": 0.7267,
+                "log_loss": 0.6019,
+                "brier": 0.2084
+            },
+            "player_metrics": {
+                "Alexander Zverev": {
+                    "Accuracy": 92.31,
+                    "Recall": 90.91,
+                    "Precision": 90.91,
+                    "Matches": 26
+                },
+                "Novak Djokovic": {
+                    "Accuracy": 50.0,
+                    "Recall": 100.0,
+                    "Precision": 50.0,
+                    "Matches": 4
+                },
+                "Daniil Medvedev": {
+                    "Accuracy": 70.59,
+                    "Recall": 62.5,
+                    "Precision": 71.43,
+                    "Matches": 17
+                },
+                "Grigor Dimitrov": {
+                    "Accuracy": 75.0,
+                    "Recall": 50.0,
+                    "Precision": 100.0,
+                    "Matches": 4
+                },
+                "Andrey Rublev": {
+                    "Accuracy": 61.54,
+                    "Recall": 66.67,
+                    "Precision": 57.14,
+                    "Matches": 13
+                },
+                "Nikoloz Basilashvili": {
+                    "Accuracy": 57.14,
+                    "Recall": 75.0,
+                    "Precision": 60.0,
+                    "Matches": 7
+                },
+                "Joao Fonseca": {
+                    "Accuracy": 92.86,
+                    "Recall": 100.0,
+                    "Precision": 83.33,
+                    "Matches": 14
+                },
+                "Learner Tien": {
+                    "Accuracy": 64.29,
+                    "Recall": 25.0,
+                    "Precision": 33.33,
+                    "Matches": 14
+                },
+                "Jannik Sinner": {
+                    "Accuracy": 96.43,
+                    "Recall": 100.0,
+                    "Precision": 93.75,
+                    "Matches": 28
+                },
+                "Carlos Alcaraz": {
+                    "Accuracy": 76.92,
+                    "Recall": 71.43,
+                    "Precision": 83.33,
+                    "Matches": 13
+                },
+                "Stan Wawrinka": {
+                    "Accuracy": 75.0,
+                    "Recall": 50.0,
+                    "Precision": 100.0,
+                    "Matches": 4
+                }
+            }
+        },
+        "online": {
+            "bias_metrics": {
+                "class_1_prediction_rate": 52.27,
+                "elo_reliance": 84.87,
+                "elo_baseline_accuracy": 64.2,
+                "upset_prediction_accuracy": 23.47,
+                "rank_reliance": 80.5,
+                "final_accuracy": 65.88,
+                "accuracy": 0.6588,
+                "balanced_accuracy": 0.6607,
+                "precision": 0.6238,
+                "recall": 0.6929,
+                "f1": 0.6565,
+                "roc_auc": 0.7278,
+                "pr_auc": 0.7154,
+                "log_loss": 0.6073,
+                "brier": 0.211
+            },
+            "player_metrics": {
+                "Alexander Zverev": {
+                    "Accuracy": 92.31,
+                    "Recall": 90.91,
+                    "Precision": 90.91,
+                    "Matches": 26
+                },
+                "Novak Djokovic": {
+                    "Accuracy": 50.0,
+                    "Recall": 100.0,
+                    "Precision": 50.0,
+                    "Matches": 4
+                },
+                "Daniil Medvedev": {
+                    "Accuracy": 76.47,
+                    "Recall": 75.0,
+                    "Precision": 75.0,
+                    "Matches": 17
+                },
+                "Grigor Dimitrov": {
+                    "Accuracy": 50.0,
+                    "Recall": 50.0,
+                    "Precision": 50.0,
+                    "Matches": 4
+                },
+                "Andrey Rublev": {
+                    "Accuracy": 76.92,
+                    "Recall": 100.0,
+                    "Precision": 66.67,
+                    "Matches": 13
+                },
+                "Nikoloz Basilashvili": {
+                    "Accuracy": 57.14,
+                    "Recall": 75.0,
+                    "Precision": 60.0,
+                    "Matches": 7
+                },
+                "Joao Fonseca": {
+                    "Accuracy": 78.57,
+                    "Recall": 100.0,
+                    "Precision": 62.5,
+                    "Matches": 14
+                },
+                "Learner Tien": {
+                    "Accuracy": 57.14,
+                    "Recall": 25.0,
+                    "Precision": 25.0,
+                    "Matches": 14
+                },
+                "Jannik Sinner": {
+                    "Accuracy": 96.43,
+                    "Recall": 100.0,
+                    "Precision": 93.75,
+                    "Matches": 28
+                },
+                "Carlos Alcaraz": {
+                    "Accuracy": 76.92,
+                    "Recall": 71.43,
+                    "Precision": 83.33,
+                    "Matches": 13
+                },
+                "Stan Wawrinka": {
+                    "Accuracy": 100.0,
+                    "Recall": 100.0,
+                    "Precision": 100.0,
+                    "Matches": 4
+                }
+            }
+        },
+        "ultimate_streaming": {
+            "bias_metrics": {
+                "class_1_prediction_rate": 50.76,
+                "elo_reliance": 89.75,
+                "elo_baseline_accuracy": 64.2,
+                "upset_prediction_accuracy": 15.02,
+                "rank_reliance": 82.35,
+                "final_accuracy": 64.71,
+                "accuracy": 0.6471,
+                "balanced_accuracy": 0.648,
+                "precision": 0.6159,
+                "recall": 0.6643,
+                "f1": 0.6392,
+                "roc_auc": 0.7149,
+                "pr_auc": 0.7028,
+                "log_loss": 0.6159,
+                "brier": 0.2148
+            },
+            "player_metrics": {
+                "Alexander Zverev": {
+                    "Accuracy": 92.31,
+                    "Recall": 90.91,
+                    "Precision": 90.91,
+                    "Matches": 26
+                },
+                "Novak Djokovic": {
+                    "Accuracy": 50.0,
+                    "Recall": 100.0,
+                    "Precision": 50.0,
+                    "Matches": 4
+                },
+                "Daniil Medvedev": {
+                    "Accuracy": 70.59,
+                    "Recall": 62.5,
+                    "Precision": 71.43,
+                    "Matches": 17
+                },
+                "Grigor Dimitrov": {
+                    "Accuracy": 25.0,
+                    "Recall": 50.0,
+                    "Precision": 33.33,
+                    "Matches": 4
+                },
+                "Andrey Rublev": {
+                    "Accuracy": 76.92,
+                    "Recall": 100.0,
+                    "Precision": 66.67,
+                    "Matches": 13
+                },
+                "Nikoloz Basilashvili": {
+                    "Accuracy": 57.14,
+                    "Recall": 75.0,
+                    "Precision": 60.0,
+                    "Matches": 7
+                },
+                "Joao Fonseca": {
+                    "Accuracy": 78.57,
+                    "Recall": 100.0,
+                    "Precision": 62.5,
+                    "Matches": 14
+                },
+                "Learner Tien": {
+                    "Accuracy": 71.43,
+                    "Recall": 25.0,
+                    "Precision": 50.0,
+                    "Matches": 14
+                },
+                "Jannik Sinner": {
+                    "Accuracy": 96.43,
+                    "Recall": 100.0,
+                    "Precision": 93.75,
+                    "Matches": 28
+                },
+                "Carlos Alcaraz": {
+                    "Accuracy": 76.92,
+                    "Recall": 71.43,
+                    "Precision": 83.33,
+                    "Matches": 13
+                },
+                "Stan Wawrinka": {
+                    "Accuracy": 100.0,
+                    "Recall": 100.0,
+                    "Precision": 100.0,
+                    "Matches": 4
+                }
+            }
+        }
+    },
+    "pcn": {
+        "static": {
+            "bias_metrics": {
+                "class_1_prediction_rate": 51.09,
+                "elo_reliance": 91.09,
+                "elo_baseline_accuracy": 64.2,
+                "upset_prediction_accuracy": 15.02,
+                "rank_reliance": 84.71,
+                "final_accuracy": 66.05,
+                "accuracy": 0.6605,
+                "balanced_accuracy": 0.6617,
+                "precision": 0.6283,
+                "recall": 0.6821,
+                "f1": 0.6541,
+                "roc_auc": 0.7054,
+                "pr_auc": 0.6934,
+                "log_loss": 0.6243,
+                "brier": 0.2181
+            },
+            "player_metrics": {
+                "Alexander Zverev": {
+                    "Accuracy": 92.31,
+                    "Recall": 90.91,
+                    "Precision": 90.91,
+                    "Matches": 26
+                },
+                "Novak Djokovic": {
+                    "Accuracy": 50.0,
+                    "Recall": 100.0,
+                    "Precision": 50.0,
+                    "Matches": 4
+                },
+                "Daniil Medvedev": {
+                    "Accuracy": 70.59,
+                    "Recall": 62.5,
+                    "Precision": 71.43,
+                    "Matches": 17
+                },
+                "Grigor Dimitrov": {
+                    "Accuracy": 50.0,
+                    "Recall": 50.0,
+                    "Precision": 50.0,
+                    "Matches": 4
+                },
+                "Andrey Rublev": {
+                    "Accuracy": 76.92,
+                    "Recall": 100.0,
+                    "Precision": 66.67,
+                    "Matches": 13
+                },
+                "Nikoloz Basilashvili": {
+                    "Accuracy": 57.14,
+                    "Recall": 75.0,
+                    "Precision": 60.0,
+                    "Matches": 7
+                },
+                "Joao Fonseca": {
+                    "Accuracy": 78.57,
+                    "Recall": 100.0,
+                    "Precision": 62.5,
+                    "Matches": 14
+                },
+                "Learner Tien": {
+                    "Accuracy": 64.29,
+                    "Recall": 25.0,
+                    "Precision": 33.33,
+                    "Matches": 14
+                },
+                "Jannik Sinner": {
+                    "Accuracy": 100.0,
+                    "Recall": 100.0,
+                    "Precision": 100.0,
+                    "Matches": 28
+                },
+                "Carlos Alcaraz": {
+                    "Accuracy": 84.62,
+                    "Recall": 71.43,
+                    "Precision": 100.0,
+                    "Matches": 13
+                },
+                "Stan Wawrinka": {
+                    "Accuracy": 100.0,
+                    "Recall": 100.0,
+                    "Precision": 100.0,
+                    "Matches": 4
+                }
+            }
+        },
+        "finetune": {
+            "bias_metrics": {
+                "class_1_prediction_rate": 51.43,
+                "elo_reliance": 91.09,
+                "elo_baseline_accuracy": 64.2,
+                "upset_prediction_accuracy": 15.02,
+                "rank_reliance": 83.36,
+                "final_accuracy": 66.05,
+                "accuracy": 0.6605,
+                "balanced_accuracy": 0.6619,
+                "precision": 0.6275,
+                "recall": 0.6857,
+                "f1": 0.6553,
+                "roc_auc": 0.7071,
+                "pr_auc": 0.6971,
+                "log_loss": 0.6216,
+                "brier": 0.2172
+            },
+            "player_metrics": {
+                "Alexander Zverev": {
+                    "Accuracy": 92.31,
+                    "Recall": 90.91,
+                    "Precision": 90.91,
+                    "Matches": 26
+                },
+                "Novak Djokovic": {
+                    "Accuracy": 50.0,
+                    "Recall": 100.0,
+                    "Precision": 50.0,
+                    "Matches": 4
+                },
+                "Daniil Medvedev": {
+                    "Accuracy": 70.59,
+                    "Recall": 62.5,
+                    "Precision": 71.43,
+                    "Matches": 17
+                },
+                "Grigor Dimitrov": {
+                    "Accuracy": 25.0,
+                    "Recall": 50.0,
+                    "Precision": 33.33,
+                    "Matches": 4
+                },
+                "Andrey Rublev": {
+                    "Accuracy": 76.92,
+                    "Recall": 100.0,
+                    "Precision": 66.67,
+                    "Matches": 13
+                },
+                "Nikoloz Basilashvili": {
+                    "Accuracy": 57.14,
+                    "Recall": 75.0,
+                    "Precision": 60.0,
+                    "Matches": 7
+                },
+                "Joao Fonseca": {
+                    "Accuracy": 78.57,
+                    "Recall": 100.0,
+                    "Precision": 62.5,
+                    "Matches": 14
+                },
+                "Learner Tien": {
+                    "Accuracy": 50.0,
+                    "Recall": 25.0,
+                    "Precision": 20.0,
+                    "Matches": 14
+                },
+                "Jannik Sinner": {
+                    "Accuracy": 96.43,
+                    "Recall": 100.0,
+                    "Precision": 93.75,
+                    "Matches": 28
+                },
+                "Carlos Alcaraz": {
+                    "Accuracy": 76.92,
+                    "Recall": 71.43,
+                    "Precision": 83.33,
+                    "Matches": 13
+                },
+                "Stan Wawrinka": {
+                    "Accuracy": 100.0,
+                    "Recall": 100.0,
+                    "Precision": 100.0,
+                    "Matches": 4
+                }
+            }
+        },
+        "retrain": {
+            "bias_metrics": {
+                "class_1_prediction_rate": 50.25,
+                "elo_reliance": 93.61,
+                "elo_baseline_accuracy": 64.2,
+                "upset_prediction_accuracy": 11.27,
+                "rank_reliance": 84.87,
+                "final_accuracy": 65.88,
+                "accuracy": 0.6588,
+                "balanced_accuracy": 0.6595,
+                "precision": 0.6288,
+                "recall": 0.6714,
+                "f1": 0.6494,
+                "roc_auc": 0.7059,
+                "pr_auc": 0.6971,
+                "log_loss": 0.624,
+                "brier": 0.2179
+            },
+            "player_metrics": {
+                "Alexander Zverev": {
+                    "Accuracy": 92.31,
+                    "Recall": 90.91,
+                    "Precision": 90.91,
+                    "Matches": 26
+                },
+                "Novak Djokovic": {
+                    "Accuracy": 50.0,
+                    "Recall": 100.0,
+                    "Precision": 50.0,
+                    "Matches": 4
+                },
+                "Daniil Medvedev": {
+                    "Accuracy": 70.59,
+                    "Recall": 62.5,
+                    "Precision": 71.43,
+                    "Matches": 17
+                },
+                "Grigor Dimitrov": {
+                    "Accuracy": 50.0,
+                    "Recall": 50.0,
+                    "Precision": 50.0,
+                    "Matches": 4
+                },
+                "Andrey Rublev": {
+                    "Accuracy": 76.92,
+                    "Recall": 100.0,
+                    "Precision": 66.67,
+                    "Matches": 13
+                },
+                "Nikoloz Basilashvili": {
+                    "Accuracy": 57.14,
+                    "Recall": 75.0,
+                    "Precision": 60.0,
+                    "Matches": 7
+                },
+                "Joao Fonseca": {
+                    "Accuracy": 78.57,
+                    "Recall": 100.0,
+                    "Precision": 62.5,
+                    "Matches": 14
+                },
+                "Learner Tien": {
+                    "Accuracy": 50.0,
+                    "Recall": 25.0,
+                    "Precision": 20.0,
+                    "Matches": 14
+                },
+                "Jannik Sinner": {
+                    "Accuracy": 100.0,
+                    "Recall": 100.0,
+                    "Precision": 100.0,
+                    "Matches": 28
+                },
+                "Carlos Alcaraz": {
+                    "Accuracy": 84.62,
+                    "Recall": 71.43,
+                    "Precision": 100.0,
+                    "Matches": 13
+                },
+                "Stan Wawrinka": {
+                    "Accuracy": 100.0,
+                    "Recall": 100.0,
+                    "Precision": 100.0,
+                    "Matches": 4
+                }
+            }
+        },
+        "online": {
+            "bias_metrics": {
+                "class_1_prediction_rate": 51.26,
+                "elo_reliance": 90.25,
+                "elo_baseline_accuracy": 64.2,
+                "upset_prediction_accuracy": 14.55,
+                "rank_reliance": 84.2,
+                "final_accuracy": 64.87,
+                "accuracy": 0.6487,
+                "balanced_accuracy": 0.65,
+                "precision": 0.6164,
+                "recall": 0.6714,
+                "f1": 0.6427,
+                "roc_auc": 0.6997,
+                "pr_auc": 0.6888,
+                "log_loss": 0.6437,
+                "brier": 0.2254
+            },
+            "player_metrics": {
+                "Alexander Zverev": {
+                    "Accuracy": 92.31,
+                    "Recall": 90.91,
+                    "Precision": 90.91,
+                    "Matches": 26
+                },
+                "Novak Djokovic": {
+                    "Accuracy": 50.0,
+                    "Recall": 100.0,
+                    "Precision": 50.0,
+                    "Matches": 4
+                },
+                "Daniil Medvedev": {
+                    "Accuracy": 76.47,
+                    "Recall": 75.0,
+                    "Precision": 75.0,
+                    "Matches": 17
+                },
+                "Grigor Dimitrov": {
+                    "Accuracy": 25.0,
+                    "Recall": 50.0,
+                    "Precision": 33.33,
+                    "Matches": 4
+                },
+                "Andrey Rublev": {
+                    "Accuracy": 76.92,
+                    "Recall": 100.0,
+                    "Precision": 66.67,
+                    "Matches": 13
+                },
+                "Nikoloz Basilashvili": {
+                    "Accuracy": 57.14,
+                    "Recall": 75.0,
+                    "Precision": 60.0,
+                    "Matches": 7
+                },
+                "Joao Fonseca": {
+                    "Accuracy": 71.43,
+                    "Recall": 100.0,
+                    "Precision": 55.56,
+                    "Matches": 14
+                },
+                "Learner Tien": {
+                    "Accuracy": 42.86,
+                    "Recall": 25.0,
+                    "Precision": 16.67,
+                    "Matches": 14
+                },
+                "Jannik Sinner": {
+                    "Accuracy": 96.43,
+                    "Recall": 100.0,
+                    "Precision": 93.75,
+                    "Matches": 28
+                },
+                "Carlos Alcaraz": {
+                    "Accuracy": 76.92,
+                    "Recall": 71.43,
+                    "Precision": 83.33,
+                    "Matches": 13
+                },
+                "Stan Wawrinka": {
+                    "Accuracy": 100.0,
+                    "Recall": 100.0,
+                    "Precision": 100.0,
+                    "Matches": 4
+                }
+            }
+        },
+        "ultimate_streaming": {
+            "bias_metrics": {
+                "class_1_prediction_rate": 45.55,
+                "elo_reliance": 85.21,
+                "elo_baseline_accuracy": 64.2,
+                "upset_prediction_accuracy": 23.94,
+                "rank_reliance": 82.18,
+                "final_accuracy": 66.55,
+                "accuracy": 0.6655,
+                "balanced_accuracy": 0.6635,
+                "precision": 0.6494,
+                "recall": 0.6286,
+                "f1": 0.6388,
+                "roc_auc": 0.6963,
+                "pr_auc": 0.689,
+                "log_loss": 0.6301,
+                "brier": 0.2206
+            },
+            "player_metrics": {
+                "Alexander Zverev": {
+                    "Accuracy": 92.31,
+                    "Recall": 90.91,
+                    "Precision": 90.91,
+                    "Matches": 26
+                },
+                "Novak Djokovic": {
+                    "Accuracy": 50.0,
+                    "Recall": 100.0,
+                    "Precision": 50.0,
+                    "Matches": 4
+                },
+                "Daniil Medvedev": {
+                    "Accuracy": 70.59,
+                    "Recall": 62.5,
+                    "Precision": 71.43,
+                    "Matches": 17
+                },
+                "Grigor Dimitrov": {
+                    "Accuracy": 50.0,
+                    "Recall": 50.0,
+                    "Precision": 50.0,
+                    "Matches": 4
+                },
+                "Andrey Rublev": {
+                    "Accuracy": 76.92,
+                    "Recall": 100.0,
+                    "Precision": 66.67,
+                    "Matches": 13
+                },
+                "Nikoloz Basilashvili": {
+                    "Accuracy": 57.14,
+                    "Recall": 75.0,
+                    "Precision": 60.0,
+                    "Matches": 7
+                },
+                "Joao Fonseca": {
+                    "Accuracy": 78.57,
+                    "Recall": 80.0,
+                    "Precision": 66.67,
+                    "Matches": 14
+                },
+                "Learner Tien": {
+                    "Accuracy": 64.29,
+                    "Recall": 25.0,
+                    "Precision": 33.33,
+                    "Matches": 14
+                },
+                "Jannik Sinner": {
+                    "Accuracy": 96.43,
+                    "Recall": 100.0,
+                    "Precision": 93.75,
+                    "Matches": 28
+                },
+                "Carlos Alcaraz": {
+                    "Accuracy": 76.92,
+                    "Recall": 71.43,
+                    "Precision": 83.33,
+                    "Matches": 13
+                },
+                "Stan Wawrinka": {
+                    "Accuracy": 100.0,
+                    "Recall": 100.0,
+                    "Precision": 100.0,
+                    "Matches": 4
+                }
+            }
+        }
+    }
+}

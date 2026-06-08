@@ -81,5 +81,8 @@ def remove_leaky_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 def remove_unused_data(data: pd.DataFrame) -> pd.DataFrame:
     COLS_TO_DROP = ['tourney_id', 'draw_size', 'tourney_date', 'match_num', 'rank_age_interaction',
-        'winner_elo', 'loser_elo', 'winner_rank_missing', 'loser_rank_missing']
-    return data.drop(columns = COLS_TO_DROP)
+        'winner_elo', 'loser_elo', 'winner_rank_missing', 'loser_rank_missing',
+        'player_1_id', 'player_2_id', 'player_1_name', 'player_2_name', 'elo_1', 'elo_2', 'p_elo',
+        'player_1_elo_delta', 'player_2_elo_delta', 'player_1_elo_group', 'player_2_elo_group',
+        'player_1_elo_quantile', 'player_2_elo_quantile', 'player_1_trend_group', 'player_2_trend_group']
+    return data.drop(columns=COLS_TO_DROP, errors='ignore')

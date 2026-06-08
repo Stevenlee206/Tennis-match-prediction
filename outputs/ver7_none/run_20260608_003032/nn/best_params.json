@@ -1,0 +1,6 @@
+{
+    "lr": 0.0001,
+    "wd": 3e-05,
+    "dropout": 0.3,
+    "optimal_epochs": 50
+}

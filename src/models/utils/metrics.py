@@ -20,6 +20,7 @@ def binary_classification_metrics(y_true: np.ndarray, y_prob: np.ndarray, thresh
 
 	y_true = np.asarray(y_true).astype(int).reshape(-1)
 	y_prob = np.asarray(y_prob).astype(float).reshape(-1)
+	y_prob = np.clip(y_prob, 1e-15, 1.0 - 1e-15)
 	y_pred = (y_prob >= threshold).astype(int)
 
 	return {

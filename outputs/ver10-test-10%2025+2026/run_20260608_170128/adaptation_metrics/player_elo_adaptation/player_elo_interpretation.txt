@@ -1,0 +1,13 @@
+PCN PLAYER-CENTRIC ELO ADAPTATION INTERPRETATION
+High Elo reliance alone is not sufficient evidence. Positive PCN advantage means PCN is better after metric direction is normalized.
+PCN advantage is positive for 133/309 matched Elo-centric comparisons.
+1. Static-to-Online/Ultimate gain in Elo-based player groups: PCN is better in 60% of matched groups; mean normalized advantage=0.0026.
+2. Outperforming Elo baseline in rising/declining/volatile players: NN/ResNet is better in most matched groups; PCN mean normalized advantage=-0.0120.
+3. High Elo-change player performance: NN/ResNet is better in most matched groups; PCN mean normalized advantage=0.0017.
+4. Improvement when disagreeing with Elo: NN/ResNet is better in most matched groups; PCN mean normalized advantage=0.0012.
+5. Elo trend tracking: PCN tracks Elo trends better in most available comparisons.
+6. Samples-to-catch-up: PCN catches up faster in most available groups.
+PCN shows stronger player-centric continual adaptation only for the positive groups above.
+NN/ResNet remains stronger in some Elo-centric or probability-sensitive comparisons; report these limitations.
+PCN shows stronger player-centric continual adaptation if it achieves larger Elo-conditioned adaptation gains, higher Elo residual gain, and lower samples-to-catch-up than NN/ResNet.
+Lower Log Loss, Brier Score, and ECE still indicate better probability calibration; do not claim global superiority from hard-label gains alone.

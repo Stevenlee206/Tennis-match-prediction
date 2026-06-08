@@ -32,14 +32,22 @@ class NNWrapper:
             probs = torch.softmax(logits, dim=1)[:, 1].cpu().numpy().flatten()
         return probs
         
-    def train_on_batch(self, X: np.ndarray, y: np.ndarray) -> float:
-        self.model.train()
+    def train_on_batch(self, X: np.ndarray, y: np.ndarray, sample_weights: np.ndarray | None = None) -> float:
+        if X.shape[0] == 1:
+            self.model.eval()  # Avoid BatchNorm crash on single sample
+        else:
+            self.model.train()
         self.optimizer.zero_grad()
         X_tensor = torch.FloatTensor(X).to(self.device)
         y_tensor = torch.LongTensor(y).to(self.device)
         
         logits = self.model(X_tensor)
-        loss = self.criterion(logits, y_tensor)
+        if sample_weights is not None:
+            loss_none = nn.CrossEntropyLoss(reduction='none')(logits, y_tensor)
+            w_tensor = torch.FloatTensor(sample_weights).to(self.device)
+            loss = torch.mean(loss_none * w_tensor)
+        else:
+            loss = self.criterion(logits, y_tensor)
         loss.backward()
         self.optimizer.step()
         
@@ -264,7 +272,7 @@ def find_optimal_epochs_tscv(model_type, input_dim, X, y, params, n_splits=5, ma
     print(f"Optimal epochs found: {optimal_epochs}")
     return optimal_epochs
 
-def train_model_full(model_type, input_dim, X: np.ndarray, y: np.ndarray, best_params, epochs=30, batch_size=64, base_weights_path=None, val_split=0.15, patience=10):
+def train_model_full(model_type, input_dim, X: np.ndarray, y: np.ndarray, best_params, epochs=30, batch_size=64, base_weights_path=None, val_split=0.15, patience=10, sample_weights: np.ndarray | None = None):
     """
     Trains the model on the full X, y using best_params.
     Includes temporal validation split and early stopping to prevent overfitting.
@@ -280,10 +288,15 @@ def train_model_full(model_type, input_dim, X: np.ndarray, y: np.ndarray, best_p
         split_idx = int(len(X) * (1 - val_split))
         X_train, X_val = X[:split_idx], X[split_idx:]
         y_train, y_val = y[:split_idx], y[split_idx:]
+        if sample_weights is not None:
+            w_train = sample_weights[:split_idx]
+        else:
+            w_train = None
         print(f"Split data into Train: {len(X_train)} samples, Val: {len(X_val)} samples.")
     else:
         X_train, X_val = X, None
         y_train, y_val = y, None
+        w_train = sample_weights
         print(f"Training on all {len(X_train)} samples without validation split.")
 
     history = {'loss': [], 'accuracy': []}
@@ -300,10 +313,15 @@ def train_model_full(model_type, input_dim, X: np.ndarray, y: np.ndarray, best_p
     for epoch in range(epochs):
         indices = np.random.permutation(len(X_train))
         X_shuf, y_shuf = X_train[indices], y_train[indices]
+        if w_train is not None:
+            w_shuf = w_train[indices]
+        else:
+            w_shuf = None
         
         losses = []
         for i in range(0, len(X_train), batch_size):
-            loss = wrapper.train_on_batch(X_shuf[i:i+batch_size], y_shuf[i:i+batch_size])
+            batch_w = w_shuf[i:i+batch_size] if w_shuf is not None else None
+            loss = wrapper.train_on_batch(X_shuf[i:i+batch_size], y_shuf[i:i+batch_size], sample_weights=batch_w)
             losses.append(loss)
             
         epoch_loss = np.mean(losses)
@@ -350,7 +368,7 @@ def train_model_full(model_type, input_dim, X: np.ndarray, y: np.ndarray, best_p
 
     return wrapper, history
 
-def train_online_stream(model_type, input_dim, X: np.ndarray, y: np.ndarray, best_params, batch_size=50, base_weights_path=None):
+def train_online_stream(model_type, input_dim, X: np.ndarray, y: np.ndarray, best_params, batch_size=50, base_weights_path=None, sample_weights: np.ndarray | None = None):
     """
     Simulates streaming data. Pre-quential Evaluation: Test first, then Train on the batch.
     """
@@ -369,6 +387,7 @@ def train_online_stream(model_type, input_dim, X: np.ndarray, y: np.ndarray, bes
     for i in range(0, len(X), batch_size):
         X_b = X[i:i+batch_size]
         y_b = y[i:i+batch_size]
+        w_b = sample_weights[i:i+batch_size] if sample_weights is not None else None
         
         # 1. Test First
         probs = wrapper.predict_proba(X_b)
@@ -385,7 +404,7 @@ def train_online_stream(model_type, input_dim, X: np.ndarray, y: np.ndarray, bes
         rolling_history['cumulative_accuracy'].append(cum_acc)
         
         # 2. Train Second (1 Epoch on this batch)
-        loss = wrapper.train_on_batch(X_b, y_b)
+        loss = wrapper.train_on_batch(X_b, y_b, sample_weights=w_b)
         rolling_history['batch_losses'].append(loss)
         
     rolling_history['all_probs'] = np.array(all_probs)

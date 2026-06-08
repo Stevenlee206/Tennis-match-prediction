@@ -82,7 +82,13 @@ def main():
         raw = df.copy()
         
         # Remove metadata columns
-        drop_cols = ['target', 'year', 'is_augmented', 'winner_name', 'loser_name', 'winner_ioc', 'loser_ioc', 'score', 'tourney_date', 'winner_elo', 'loser_elo']
+        drop_cols = [
+            'target', 'year', 'is_augmented', 'winner_name', 'loser_name', 'winner_ioc', 'loser_ioc',
+            'score', 'tourney_date', 'winner_elo', 'loser_elo', 'player_1_id', 'player_2_id',
+            'player_1_name', 'player_2_name', 'elo_1', 'elo_2', 'p_elo',
+            'player_1_elo_delta', 'player_2_elo_delta', 'player_1_elo_group', 'player_2_elo_group',
+            'player_1_elo_quantile', 'player_2_elo_quantile', 'player_1_trend_group', 'player_2_trend_group',
+        ]
         X = df_clean.drop(columns=drop_cols, errors='ignore').fillna(0).values
         y = df_clean['target'].values if 'target' in df_clean.columns else np.zeros(len(df_clean))
         return X, y, raw
