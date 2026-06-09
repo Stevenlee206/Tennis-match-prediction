@@ -63,7 +63,6 @@ class Preprocessing:
         data = remove_unused_data(data)
         data = encode_categorical_features(data)
 
-        # --- UPDATED: Recalculate based on ratio (ratio holds true even after augmentation doubles size) ---
         current_train_idx = int(len(data) * train_ratio)
 
         data = feature_selection(data, current_train_idx, k=50)

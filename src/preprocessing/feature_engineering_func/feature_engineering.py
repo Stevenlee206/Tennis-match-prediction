@@ -2,132 +2,48 @@ import pandas as pd
 import numpy as np
 from src.preprocessing.load_data_func.load_data import load_data
 from src.config.data_config import YEARS, SURFACES
-
-"""
-Processing player metadata to create differential features (age, height, rank) and cyclically encodes match dates. 
-Implementing time-aware, rolling calculations for both Elo and Glicko-2 rating systems (including surface-specific variants) 
-and short-term form momentum, strictly updating state post-match to prevent data leakage.
-"""
-from src.preprocessing.feature_engineering_func.rating.glicko2_calculator import (
-    PlayerState,
-    age_player_rd,
-    update_player_vs_one_opponent,
-)
-
+from src.preprocessing.feature_engineering_func.rating.glicko2_calculator import (PlayerState, age_player_rd, update_player_vs_one_opponent,)
 
 def build_basic_features(df: pd.DataFrame) -> pd.DataFrame:
     data = df.copy()
-    # rank different
-
-    data["rank_diff"] = (
-        data["winner_rank"] - data["loser_rank"]
-    )
-
-    data["rank_points_diff"] = (
-        data["winner_rank_points"] - data["loser_rank_points"]
-    )
-
-    # Physical state different
-
-    data["age_diff"] = (
-        data["winner_age"] - data["loser_age"]
-    )
-
-    data["height_diff"] = (
-        data["winner_ht"] - data["loser_ht"]
-    )
-
-
-    # Hand matchup
-
+    data["rank_diff"] = (data["winner_rank"] - data["loser_rank"])
+    data["rank_points_diff"] = (data["winner_rank_points"] - data["loser_rank_points"])
+    data["age_diff"] = (data["winner_age"] - data["loser_age"])
+    data["height_diff"] = (data["winner_ht"] - data["loser_ht"])
     if {"winner_hand", "loser_hand"}.issubset(data.columns):
-        data["same_hand_flag"] = (
-            data["winner_hand"] == data["loser_hand"]
-        ).astype(int)
-
-    # Time Features
-    # giữ nguyên year/month + thêm sin/cos encoding
+        data["same_hand_flag"] = (data["winner_hand"] == data["loser_hand"]).astype(int)
     if "tourney_date" in data.columns:
-        data["tourney_date"] = pd.to_datetime(
-            data["tourney_date"],
-            format="%Y%m%d",
-            errors="coerce"
-        )
-
-        # giữ nguyên year/month
+        data["tourney_date"] = pd.to_datetime(data["tourney_date"], format="%Y%m%d",errors="coerce")
         data["year"] = data["tourney_date"].dt.year
         data["month"] = data["tourney_date"].dt.month
         data["day_of_year"] = data["tourney_date"].dt.dayofyear
-
-        """
-        Applies sine and cosine transformations to time-based variables (month,day of the year). 
-        This preserves the continuous, cyclical nature of the calendar, 
-        ensuring the model understands the chronological proximity between the end and beginning of a year.
-        """
-
-        # cyclical encoding cho month
-        data["month_sin"] = np.sin(
-            2 * np.pi * data["month"] / 12
-        )
-
-        data["month_cos"] = np.cos(
-            2 * np.pi * data["month"] / 12
-        )
-
-        # cyclical encoding cho day_of_year
-        data["day_sin"] = np.sin(
-            2 * np.pi * data["day_of_year"] / 365
-        )
-
-        data["day_cos"] = np.cos(
-            2 * np.pi * data["day_of_year"] / 365
-        )
-
-    # Interaction
-    """
-    Creates a combined interaction feature by multiplying the rank difference and age difference. 
-    This captures the non-linear relationship and combined effect of physical age gaps 
-    and professional standing on the match outcome.
-    """
-    data["rank_age_interaction"] = (
-        data["rank_diff"] * data["age_diff"]
-    )
-
+        data["month_sin"] = np.sin(2 * np.pi * data["month"] / 12)
+        data["month_cos"] = np.cos(2 * np.pi * data["month"] / 12)
+        data["day_sin"] = np.sin(2 * np.pi * data["day_of_year"] / 365)
+        data["day_cos"] = np.cos(2 * np.pi * data["day_of_year"] / 365)
+    data["rank_age_interaction"] = (data["rank_diff"] * data["age_diff"])
     return data
 
-
-# ELO Feature
-def build_elo_feature(df: pd.DataFrame,
-                      k_global: int = 32,
-                      k_surface: int = 24,) -> pd.DataFrame:
-
-    # Load pre-data (5 năm warm-up)
+def build_elo_feature(df: pd.DataFrame, k_global: int = 32, k_surface: int = 24,) -> pd.DataFrame:
     dfs = []
     for year in range(YEARS[0] - 5, YEARS[0]):
         df_year = load_data(f"atp_matches_{year}.csv")
         dfs.append(df_year)
     pre_data = pd.concat(dfs, ignore_index=True).sort_values('tourney_date')
-
-    # Init rating dicts
     elo_global: dict  = {}
     elo_surface: dict = {}
-
-    # get global elo of a player based on pid, if not exist, return 1500
     def get_global(pid):
         return elo_global.get(pid, 1500)
 
-    # get surface elo of a player based on pid & surface, if not exist, return global elo instead
     def get_surface(pid, surface):
         return elo_surface.get((pid, surface), get_global(pid))
 
-    # update elo after the match end
     def update(pid_w, pid_l, surface):
         rw, rl = get_global(pid_w), get_global(pid_l)
         exp_w  = 1 / (1 + 10 ** ((rl - rw) / 400))
         elo_global[pid_w] = rw + k_global * (1 - exp_w)
         elo_global[pid_l] = rl + k_global * (0 - (1 - exp_w))
 
-        # --- surface ---
         if surface in SURFACES:
             sw = get_surface(pid_w, surface)
             sl = get_surface(pid_l, surface)
@@ -135,12 +51,10 @@ def build_elo_feature(df: pd.DataFrame,
             elo_surface[(pid_w, surface)] = sw + k_surface * (1 - exp_sw)
             elo_surface[(pid_l, surface)] = sl + k_surface * (0 - (1 - exp_sw))
 
-    # Warm-up từ pre_data
     for _, row in pre_data.iterrows():
         update(row['winner_id'], row['loser_id'],
                row.get('surface', 'Unknown'))
 
-    # Build features trên df chính
     data = df.sort_values('tourney_date').reset_index(drop=True).copy()
 
     records = {
@@ -155,10 +69,8 @@ def build_elo_feature(df: pd.DataFrame,
     for _, row in data.iterrows():
         w, l   = row['winner_id'], row['loser_id']
         surface = row.get('surface', 'Unknown')
-
         rw_g = get_global(w)
         rl_g = get_global(l)
-
         records['winner_elo'].append(rw_g)
         records['loser_elo'].append(rl_g)
         records['elo_diff'].append(rw_g - rl_g)
@@ -166,28 +78,18 @@ def build_elo_feature(df: pd.DataFrame,
         for s in SURFACES:
             col = f'elo_{s.lower()}_diff'
             records[col].append(get_surface(w, s) - get_surface(l, s))
-
         update(w, l, surface)
 
     for col, values in records.items():
         data[col] = values
-
     return data
 
-
-# GLICKO2 Feature
-def build_glicko2_feature( df: pd.DataFrame,*,
-                           tau: float = 0.5,
-                           period_days: int = 7,) -> pd.DataFrame:
-    
-    # Load pre-data (5 năm warm-up)
+def build_glicko2_feature(df: pd.DataFrame,*, tau: float = 0.5, period_days: int = 7,) -> pd.DataFrame:
     dfs = []
     for year in range(YEARS[0] - 5, YEARS[0]):
         df_year = load_data(f"atp_matches_{year}.csv")
         dfs.append(df_year)
     pre_data = pd.concat(dfs, ignore_index=True).sort_values('tourney_date')
-
-    # Init rating dicts
     players_global: dict[int, PlayerState] = {}
     players_surface: dict[tuple[int, str], PlayerState] = {}
 
@@ -237,18 +139,13 @@ def build_glicko2_feature( df: pd.DataFrame,*,
             update_player_vs_one_opponent(ws, ws_opp_snapshot, score=1.0, tau=tau)
             update_player_vs_one_opponent(ls, ls_opp_snapshot, score=0.0, tau=tau)
 
-            # update current date
             ws.last_date = date
             ls.last_date = date
 
-    # Warm-up từ pre_data
     for _, row in pre_data.iterrows():
         update(row['winner_id'], row['loser_id'], row['tourney_date'],
                row.get('surface', 'Unknown'))
-
-    # Build features on main df
     data = df.sort_values('tourney_date').reset_index(drop=True).copy()
-
     records = {
         'winner_glicko2':      [],
         'loser_glicko2':       [],
@@ -262,10 +159,8 @@ def build_glicko2_feature( df: pd.DataFrame,*,
         w, l = row['winner_id'], row['loser_id']
         surface = row.get('surface', 'Unknown')
         date = row['tourney_date']
-
         rw_g = get_global(w)
         rl_g = get_global(l)
-
         records['winner_glicko2'].append(rw_g.rating)
         records['loser_glicko2'].append(rl_g.rating)
         records['glicko2_diff'].append(rw_g.rating - rl_g.rating)
@@ -273,22 +168,12 @@ def build_glicko2_feature( df: pd.DataFrame,*,
         for s in SURFACES:
             col = f'glicko2_{s.lower()}_diff'
             records[col].append(get_surface(w, s).rating - get_surface(l, s).rating)
-
         update(w, l, date, surface)
-
     for col, values in records.items():
         data[col] = values
-
     return data
 
-
-# Recent performance ( momentum of each player )
 def build_recent_form(df: pd.DataFrame, window: int = 5) -> pd.DataFrame:
-    """
-    Computes the difference in recent win rates between the winner and loser over a specified rolling window of past matches.
-    To prevent data leakage, a player's form is calculated strictly using historical results prior to the current match,
-    with a default 0.5 baseline applied to players without prior records.
-    """
     data = df.sort_values('tourney_date').copy()
     win_history = {}
     form_diff_list = []
