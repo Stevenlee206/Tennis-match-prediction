@@ -11,11 +11,7 @@
     "model_params": {
         "depth": 3,
         "width": 64,
-        "hidden_sizes": [
-            64,
-            64,
-            64
-        ],
+        "hidden_sizes": [64, 64, 64],
         "training_params": {
             "batch_size": 64,
             "epochs": 50,
@@ -80,6 +76,7 @@
     "bias_metrics": {
         "final_test_eval": {
             "class_1_prediction_rate": 48.39,
+            "matthews_corrcoef": 0.2988,
             "elo_reliance": 83.26,
             "elo_baseline_accuracy": 64.06,
             "upset_prediction_accuracy": 24.81,

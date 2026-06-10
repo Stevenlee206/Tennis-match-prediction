@@ -116,6 +116,7 @@ def prep_xy(df):
     y = df_clean['target'].values if 'target' in df_clean.columns else np.zeros(len(df_clean))
     return X, y, raw, features
 
+### TESTING UPGRATE ###
 def get_static_upset_weights(raw_df, upset_weight=1.5):
     weights = np.ones(len(raw_df))
     if 'elo_diff' in raw_df.columns and 'target' in raw_df.columns:
@@ -325,6 +326,7 @@ def print_player_elo_table_preview(tables):
         print(f"\n[{table_name}]")
         print(table[visible_cols].head(30).to_string(index=False))
     print("=" * 50 + "\n")
+### ### ###
 
 def run_benchmark():
     parser = argparse.ArgumentParser(description="Continual Learning Benchmark")

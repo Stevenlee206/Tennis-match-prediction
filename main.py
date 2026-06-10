@@ -5,7 +5,7 @@ from src.preprocessing.preprocessing import Preprocessing
 import joblib
 import json
 import numpy as np
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.metrics import accuracy_score, classification_report, matthews_corrcoef
 from datetime import datetime
 
 def evaluate_model_bias(y_true, y_pred, X_raw, dataset_name=""):
@@ -26,6 +26,11 @@ def evaluate_model_bias(y_true, y_pred, X_raw, dataset_name=""):
     pred_p1_rate = np.mean(y_pred == 1) * 100
     metrics['class_1_prediction_rate'] = round(pred_p1_rate, 2)
     print(f"Class 1 Prediction Rate:   {pred_p1_rate:.2f}% (Ideal: ~50.0%)")
+
+    # Matthews Correlation Coefficient is robust for imbalanced binary labels.
+    mcc = matthews_corrcoef(y_true, y_pred)
+    metrics['matthews_corrcoef'] = round(float(mcc), 4)
+    print(f"Matthews Corrcoef (MCC):   {mcc:.4f}")
 
     # 2. Elo Analysis
     if 'elo_diff' in X_raw.columns:
@@ -59,6 +64,20 @@ def evaluate_model_bias(y_true, y_pred, X_raw, dataset_name=""):
     print("==================================================\n")
     
     return metrics
+
+def load_pc_state_dict(model_path, device):
+    """
+    Load Predictive Coding weights.
+
+    Current checkpoints are saved as .pt via torch.save(state_dict, path).
+    The .npz branch is kept only for older artifacts.
+    """
+    import torch
+
+    model_path = Path(model_path)
+    if model_path.suffix == ".npz":
+        return dict(np.load(model_path, allow_pickle=True))
+    return torch.load(model_path, map_location=device, weights_only=True)
 
 def append_metrics_to_config(config_path, metrics):
     """Safely appends bias metrics to the existing JSON config file."""
@@ -424,8 +443,8 @@ def main():
                 device = "cuda" if torch.cuda.is_available() else "cpu"
                 best_model = PredictiveCodingNetworkTorch(layer_sizes=layer_sizes, cfg=pc_cfg, device=device)
                 
-                # Load weights
-                state = dict(np.load(model_path))
+                # Load weights. New checkpoints use .pt/torch.save; .npz remains supported for old runs.
+                state = load_pc_state_dict(model_path, device)
                 best_model.load_state_dict(state)
                 probs = best_model.predict_proba_torch(X_val_scaled).detach().cpu().numpy()
                 y_pred_val = (probs >= 0.5).astype(int)
@@ -527,10 +546,7 @@ def main():
                 device = "cuda" if torch.cuda.is_available() else "cpu"
                 best_model = PredictiveCodingNetworkTorch(layer_sizes=layer_sizes, cfg=pc_cfg, device=device)
                 
-                if str(model_path).endswith('.npz'):
-                    state = dict(np.load(model_path))
-                else:
-                    state = torch.load(model_path, map_location=device, weights_only=True)
+                state = load_pc_state_dict(model_path, device)
                 best_model.load_state_dict(state)
                 probs = best_model.predict_proba_torch(X_test_scaled).detach().cpu().numpy()
                 y_pred_test = (probs >= 0.5).astype(int)
@@ -631,11 +647,8 @@ def main():
                 device = "cuda" if torch.cuda.is_available() else "cpu"
                 best_model = PredictiveCodingNetworkTorch(layer_sizes=layer_sizes, cfg=pc_cfg, device=device)
                 
-                # Load weights
-                if str(model_path).endswith('.npz'):
-                    state = dict(np.load(model_path))
-                else:
-                    state = torch.load(model_path, map_location=device, weights_only=True)
+                # Load weights. New checkpoints use .pt/torch.save; .npz remains supported for old runs.
+                state = load_pc_state_dict(model_path, device)
                 best_model.load_state_dict(state)
                 probs = best_model.predict_proba_torch(X_val_scaled).detach().cpu().numpy()
                 y_pred_val = (probs >= 0.5).astype(int)
