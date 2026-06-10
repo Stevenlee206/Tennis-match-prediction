@@ -59,7 +59,7 @@ def create_target(df: pd.DataFrame, random_state: int = 42, augment: bool = True
         'elo_diff', 'elo_hard_diff', 'elo_clay_diff', 'elo_grass_diff', 
         'glicko2_diff', 'glicko2_hard_diff', 'glicko2_clay_diff', 'glicko2_grass_diff', 
         'form_diff',
-        'h2h_advantage_diff', 'hand_win_pct_diff',
+        'transitive_h2h_diff', 'hand_pct_diff',
     ]
 
     for col in elo_form_matchup_cols:

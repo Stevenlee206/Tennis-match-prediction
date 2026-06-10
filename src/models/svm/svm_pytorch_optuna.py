@@ -194,6 +194,7 @@ def train_and_evaluate(X_train, y_train, X_val, y_val, params, epochs=50, batch_
     if has_val:
         y_val_svm = np.where(y_val == 0, -1, 1)
         X_val_t = torch.FloatTensor(X_val).to(device)
+        y_val_t = torch.FloatTensor(y_val_svm).to(device)  # ---> NEW: Create validation target tensor
     
     n_features = X_train.shape[1]
     model = PyTorchLinearSVM(n_features).to(device)
@@ -224,7 +225,9 @@ def train_and_evaluate(X_train, y_train, X_val, y_val, params, epochs=50, batch_
     best_val_acc = 0.0
     best_epoch = epochs  
     best_model_weights = copy.deepcopy(model.state_dict())
-    history = {'train_loss': [], 'train_acc': [], 'val_acc': []}
+    
+    # ---> UPDATED: Added 'val_loss' to the dictionary
+    history = {'train_loss': [], 'train_acc': [], 'val_loss': [], 'val_acc': []}
     
     for epoch in range(epochs):
         model.train()
@@ -252,6 +255,11 @@ def train_and_evaluate(X_train, y_train, X_val, y_val, params, epochs=50, batch_
             
             if has_val:
                 val_preds = model(X_val_t)
+                
+                # ---> NEW: Calculate unweighted validation hinge loss
+                val_weights = torch.ones_like(y_val_t).to(device) 
+                v_loss = weighted_hinge_loss(val_preds, y_val_t, val_weights).item()
+                
                 val_preds_binary = (val_preds > 0).cpu().numpy().astype(int)
                 val_acc = accuracy_score(y_val, val_preds_binary)
                 
@@ -262,6 +270,7 @@ def train_and_evaluate(X_train, y_train, X_val, y_val, params, epochs=50, batch_
                 
                 if track_history:
                     history['val_acc'].append(val_acc)
+                    history['val_loss'].append(v_loss) # ---> NEW: Record the loss
             else:
                 val_acc = 0.0
                 

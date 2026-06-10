@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-def apply_fatigue_and_clutch_metrics(df, train_idx: int):
+def apply_fatigue_and_clutch_metrics(df : pd.DataFrame, train_idx: int):
     """
     Calculates in-tournament cumulative fatigue and 365-day rolling clutch defense.
     """

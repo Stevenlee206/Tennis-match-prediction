@@ -1,6 +1,6 @@
 import pandas as pd
 
-def apply_matchup_topography(df):
+def apply_matchup_topography(df : pd.DataFrame):
     df = df.sort_values(['tourney_date']).copy()
     
     h2h_tracker = {} 

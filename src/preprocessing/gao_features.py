@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-def apply_historical_serve_metrics(df, train_idx: int):
+def apply_historical_serve_metrics(df : pd.DataFrame, train_idx: int):
     """Calculates 365-day rolling historical averages for all Gao serve metrics."""
     if not pd.api.types.is_datetime64_any_dtype(df['tourney_date']):
         df['tourney_date'] = pd.to_datetime(df['tourney_date'], format='%Y%m%d')
@@ -60,7 +60,7 @@ def apply_historical_serve_metrics(df, train_idx: int):
         df[f'w_{metric}'] = df[f'w_{metric}'].fillna(w_med)
         df[f'l_{metric}'] = df[f'l_{metric}'].fillna(l_med)
     return df
-def create_gao_dataset(df, train_idx: int):
+def create_gao_dataset(df : pd.DataFrame, train_idx: int):
     """Randomizes P1 and P2, calculates differences, and handles missing values."""
     target_features = [
         'ht', 'age', 'AceVsDf', 'FirstIn1stServe', 'FirstWonFirstIn', 'SecondWonSecondIn'
