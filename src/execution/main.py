@@ -1,3 +1,8 @@
+import os
+import sys
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 from src.execution.parse_args import parse_arguments
 from src.execution.prepare_data import prepare_data
 from src.execution.get_pipeline_runner import get_pipeline_runner
@@ -91,7 +96,7 @@ def main():
 
         print(f"Time-Series CV Splits -> Modelling Pool: {len(X_train_val)}")
 
-        run_pipeline(X_train_val, y_train_val, None, None, out_dir, rep_dir, **pipeline_kwargs)
+        run_pipeline(X_train_val, y_train_val, None, None, out_dir, rep_dir, **valid_kwargs)
 
         # Assessment based on the Quarantine Test (Last chunk never used)
         load_and_evaluate_model(args, X_test, y_test, out_dir)

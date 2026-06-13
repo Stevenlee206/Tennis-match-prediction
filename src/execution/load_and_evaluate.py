@@ -1,7 +1,11 @@
-import json
+import os
+import sys
 import joblib
 import numpy as np
 from pathlib import Path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 from src.execution.bias_analysis import evaluate_model_bias, append_metrics_to_config
 from src.execution.model_interpretation import calculate_feature_importances, plot_interpretability
 
