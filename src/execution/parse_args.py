@@ -14,8 +14,8 @@ def parse_arguments():
     # Models & feature engineering (k-means,pca) Config
     model_group = parser.add_argument_group("Core Model & Feature Engineering")
     model_group.add_argument("--model", type=str,
-                             choices=["svm", "rf", "pytorch_svm", "tabnet", "deepforest",
-                                      "xgboost","decisiontree","adaboost","logistic_regression","naive_bayes"],
+                             choices=["svm", "rf", "pytorch_svm",
+                                      "xgboost","decisiontree","logistic_regression","naive_bayes"],
                              default="svm",help="Algorithm to use")
 
     model_group.add_argument("--add_kmeans", action="store_true",
@@ -60,13 +60,6 @@ def parse_arguments():
                            default="cosine", help="LR scheduler for PyTorch models")
 
     # hyperparameter tuning configurations
-
-    # PSO
-    opt_group.add_argument("--particles", type=int,
-                           default=15, help="Particles for PSO")
-    opt_group.add_argument("--iterations", type=int,
-                           default=20, help="Iterations for PSO")
-
     # GA
     opt_group.add_argument("--population", type=int,
                            default=20, help="Population size for GA")
@@ -104,16 +97,6 @@ def parse_arguments():
     rf_group.add_argument("--rf_depth_min", type=int, default=5)
     rf_group.add_argument("--rf_depth_max", type=int, default=50)
     rf_group.add_argument("--rf_depth_steps", type=int, default=5)
-
-    # DF config
-    df_group = parser.add_argument_group("DeepForest Specific Params")
-    df_group.add_argument("--df_max_layers_min", type=int, default=2)
-    df_group.add_argument("--df_max_layers_max", type=int, default=10)
-    df_group.add_argument("--df_n_trees_min", type=int, default=50)
-    df_group.add_argument("--df_n_trees_max", type=int, default=200)
-    df_group.add_argument("--df_depth_min", type=int, default=5)
-    df_group.add_argument("--df_depth_max", type=int, default=30)
-
     # xgboost
     opt_group.add_argument("--custom_n_estimators", type=int,
                            nargs='+', default=None,
@@ -152,10 +135,6 @@ def parse_arguments():
     opt_group.add_argument("--var_smoothing", type=float, nargs='+',
                           default=[1e-9, 1e-7, 1e-5, 1e-3, 1e-1],
                           help="var_smoothing for Naive Bayes")
-
-
-
-
     args = parser.parse_args()
 
     if args.mode == "sgd" and args.model != "svm":

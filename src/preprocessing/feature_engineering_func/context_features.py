@@ -5,15 +5,9 @@ def apply_fatigue_and_clutch_metrics(df, train_idx: int):
     """
     Calculates in-tournament cumulative fatigue and 365-day rolling clutch defense.
     """
-    # Fill missing minutes with the median to avoid NaN math errors
     median_mins = df['minutes'].iloc[:train_idx].median()
     df['minutes'] = df['minutes'].fillna(median_mins)
-    
-    # Store original index for safe mapping
     df['match_idx'] = df.index
-    
-    # EXTRACT TIMELINE DATA
-    # Grab minutes AND break point stats all at once!
     winners = df[['match_idx', 'tourney_id', 'match_num', 'winner_id', 'minutes', 'w_bpSaved', 'w_bpFaced']].copy()
     winners.columns = ['match_idx', 'tourney_id', 'match_num', 'player_id', 'minutes', 'bpSaved', 'bpFaced']
     winners['is_winner'] = True
@@ -23,16 +17,10 @@ def apply_fatigue_and_clutch_metrics(df, train_idx: int):
     losers['is_winner'] = False
     
     timeline = pd.concat([winners, losers])
-    
-    # Fill missing break points with 0
     timeline['bpSaved'] = timeline['bpSaved'].fillna(0)
     timeline['bpFaced'] = timeline['bpFaced'].fillna(0)
-
-    # Pull in the dates for the rolling window
     date_map = df.set_index('match_idx')['tourney_date']
     timeline['tourney_date'] = timeline['match_idx'].map(date_map)
-    
-    # Sort chronologically by player, date, and match number
     timeline = timeline.sort_values(['player_id', 'tourney_date', 'match_num'])
     """    
     FEATURE 1: IN-TOURNAMENT FATIGUE (MINUTES)
@@ -44,8 +32,6 @@ def apply_fatigue_and_clutch_metrics(df, train_idx: int):
     # FEATURE 2: 365-DAY CLUTCH FACTOR (BP SAVED)
     timeline.index = timeline['tourney_date']
     roll_cols = ['bpSaved', 'bpFaced']
-    
-    # 365-day rolling sum
     rolling_sums = timeline.groupby('player_id')[roll_cols].rolling('365D', min_periods=1).sum()
     
     # SUBTRACT CURRENT MATCH TO PREVENT TARGET LEAKAGE

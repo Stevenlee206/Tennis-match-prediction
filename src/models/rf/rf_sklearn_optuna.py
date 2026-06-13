@@ -9,17 +9,13 @@ import optuna
 from pathlib import Path
 from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
 from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA  # <--- ADDED PCA IMPORT
+from sklearn.decomposition import PCA  
 from sklearn.metrics import accuracy_score
 from sklearn.cluster import KMeans
 import warnings
 
-# Mute Scikit-Learn FutureWarnings caused by third-party libraries like sktree
 warnings.filterwarnings("ignore", category=FutureWarning, module="sklearn")
 warnings.filterwarnings("ignore", category=FutureWarning, module="sktree")
-# =====================================================================
-# HOTFIX: Patch Scikit-Learn (Kept from original)
-# =====================================================================
 import sklearn.ensemble._forest as forest
 _original_forest_init = forest.ForestClassifier.__init__
 
@@ -29,46 +25,12 @@ def _patched_forest_init(self, *args, **kwargs):
     _original_forest_init(self, *args, **kwargs)
 
 forest.ForestClassifier.__init__ = _patched_forest_init
-# =====================================================================
-
-# Try to import RotationForest (Kept from original)
-try:
-    from rotation_forest import RotationForestClassifier
-    import rotation_forest.rotation_forest as rf_module
-    from rotation_forest.rotation_forest import RotationTreeClassifier
-    from sklearn.exceptions import NotFittedError
-    from sklearn.tree import DecisionTreeClassifier
-
-    rf_module.NotFittedError = NotFittedError
-
-    def _patched_reduce(self):
-        res = DecisionTreeClassifier.__reduce__(self)
-        if len(res) == 3:
-            func, args, state = res
-            if isinstance(state, dict):
-                for attr in ['rotation_matrix_', 'pca_']:
-                    if hasattr(self, attr):
-                        state[attr] = getattr(self, attr)
-            return (func, args, state)
-        return res
-
-    def _patched_setstate(self, state):
-        custom_attrs = {attr: state.pop(attr) for attr in ['rotation_matrix_', 'pca_'] if attr in state}
-        DecisionTreeClassifier.__setstate__(self, state)
-        for attr, val in custom_attrs.items():
-            setattr(self, attr, val)
-
-    RotationTreeClassifier.__reduce__ = _patched_reduce
-    RotationTreeClassifier.__setstate__ = _patched_setstate
-
-    HAS_ROT_FOREST = True
-except ImportError:
-    HAS_ROT_FOREST = False
 try:
     from sktree import ObliqueRandomForestClassifier
     HAS_OBLIQUE = True
 except ImportError:
     HAS_OBLIQUE = False
+
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.ensemble._forest import _generate_sample_indices
 
@@ -85,12 +47,10 @@ class WeightedRandomForestClassifier(RandomForestClassifier):
         n_samples = X.shape[0]
         self.tree_weights_ = np.zeros(self.n_estimators)
 
-        # Ensure X and y are arrays for safe indexing
         X_arr = X.values if isinstance(X, (pd.DataFrame, pd.Series)) else X
         y_arr = y.values if isinstance(y, (pd.DataFrame, pd.Series)) else y
 
         for i, tree in enumerate(self.estimators_):
-            # Find the indices this specific tree used for training
             train_indices = _generate_sample_indices(tree.random_state, n_samples, n_samples)
             
             # The OOB samples are everything NOT in the train_indices
@@ -104,34 +64,27 @@ class WeightedRandomForestClassifier(RandomForestClassifier):
             X_oob = X_arr[oob_mask]
             y_oob = y_arr[oob_mask]
 
-            # Grade the tree (Applying your custom upset weights if they exist!)
+            # Grade the tree 
             if sample_weight is not None:
                 w_oob = sample_weight[oob_mask]
                 oob_acc = accuracy_score(y_oob, tree.predict(X_oob), sample_weight=w_oob)
             else:
                 oob_acc = accuracy_score(y_oob, tree.predict(X_oob))
 
-            # Penalize trees worse than a coin flip. 
-            # We subtract 0.5 so a 50% accurate tree gets weight near 0.
             self.tree_weights_[i] = max(0.0001, oob_acc - 0.50)
 
-        # 3. Normalize the weights so they sum to 1.0
         self.tree_weights_ = self.tree_weights_ / np.sum(self.tree_weights_)
         return self
 
     def predict_proba(self, X):
-        # Get raw probabilities from all trees. Shape: (n_estimators, n_samples, n_classes)
         all_probas = np.array([tree.predict_proba(X) for tree in self.estimators_])
-
-        # Calculate the weighted sum of probabilities using tensor dot product
-        # This replaces the standard mean() average
         weighted_probas = np.tensordot(self.tree_weights_, all_probas, axes=(0, 0))
         return weighted_probas
 
     def predict(self, X):
-        # Determine the final class based on highest weighted probability
         probas = self.predict_proba(X)
         return self.classes_[np.argmax(probas, axis=1)]
+
 def generate_sample_weights(X_raw, y_raw, strategy="none", base_weight=1.0):
     """
     Dynamically routes and calculates sample weights based on the chosen strategy.
@@ -142,24 +95,13 @@ def generate_sample_weights(X_raw, y_raw, strategy="none", base_weight=1.0):
     if strategy == "none" or base_weight <= 1.0 or 'elo_diff' not in X_raw.columns:
         return weights
 
-    # Ensure y is a numpy array for safe boolean indexing
     y_vals = y_raw.values if isinstance(y_raw, pd.Series) else y_raw
     elo_diffs = X_raw['elo_diff'].values
-    
-    # Base Upset Mask: P1 has higher Elo but loses (y==0) OR P1 has lower Elo but wins (y==1)
     upset_mask = ((elo_diffs > 0) & (y_vals == 0)) | ((elo_diffs < 0) & (y_vals == 1))
 
-    # ---------------------------------------------------------
-    # STRATEGY 1: STATIC (The Hardcoded Flag)
-    # Every upset gets the exact same flat penalty.
-    # ---------------------------------------------------------
     if strategy == "static":
         weights[upset_mask] = base_weight
 
-    # ---------------------------------------------------------
-    # STRATEGY 2: MAGNITUDE (Proportional to the Surprise)
-    # A 300 Elo upset penalizes the model far more than a 10 Elo upset.
-    # ---------------------------------------------------------
     elif strategy == "magnitude":
         for i in range(n_samples):
             if upset_mask[i]:
@@ -169,11 +111,6 @@ def generate_sample_weights(X_raw, y_raw, strategy="none", base_weight=1.0):
                 # (e.g., A 200 Elo upset with a base_weight of 2.0 = 1.0 + (2.0 * 2) = Weight of 5.0)
                 weights[i] = 1.0 + (base_weight * gap_severity)
 
-    # ---------------------------------------------------------
-    # STRATEGY 3: TEMPORAL (Recency Decay)
-    # Upsets from 10 years ago matter less than upsets from last month.
-    # Assumes data is sorted chronologically.
-    # ---------------------------------------------------------
     elif strategy == "temporal":
         # Create an exponential curve from near 0.0 (oldest match) to 1.0 (newest match)
         decay_curve = np.exp(np.linspace(-3, 0, n_samples))
@@ -184,18 +121,13 @@ def generate_sample_weights(X_raw, y_raw, strategy="none", base_weight=1.0):
                 weights[i] = 1.0 + ((base_weight - 1.0) * decay_curve[i])
 
     return weights
-# ---> ADDED add_pca ARGUMENT
+
 def objective(trial, X_train, y_train, X_val, y_val, n_est_min, n_est_max, depth_min, depth_max, variant="rf", add_pca=False, add_kmeans=False, n_clusters=5, validation="holdout", weight_strategy="none", upset_weight=1.0, n_splits=5, tscv_test_size=None):
     params = {
         "n_estimators": trial.suggest_int("n_estimators", n_est_min, n_est_max),
         "max_depth": trial.suggest_int("max_depth", depth_min, depth_max),
-        
-        # INCREASED: Force at least 15-50 matches before allowing a split
         "min_samples_split": trial.suggest_int("min_samples_split", 15, 50),
-        
-        # ADDED: Only use a random subset of features per split (forces diversity)
         "max_features": trial.suggest_categorical("max_features", ["sqrt", "log2"]),
-        
         "random_state": 42,
     }
     
@@ -206,8 +138,6 @@ def objective(trial, X_train, y_train, X_val, y_val, n_est_min, n_est_max, depth
         params["ccp_alpha"] = trial.suggest_float("ccp_alpha", 0.0, 0.05)
         params["n_jobs"] = -1
         clf = RandomForestClassifier(**params)
-    elif variant == "rotation_forest":
-        clf = RotationForestClassifier(**params)
     elif variant == "oblique":
         if not HAS_OBLIQUE:
             raise ImportError("Please run: pip install sktree")
@@ -223,7 +153,7 @@ def objective(trial, X_train, y_train, X_val, y_val, n_est_min, n_est_max, depth
         params["n_jobs"] = -1
         clf = RandomForestClassifier(**params)
         
-    #  HOLDOUT
+    # HOLDOUT
     if validation == "holdout":
         scaler = StandardScaler()
         X_t_scaled = scaler.fit_transform(X_train)
@@ -244,16 +174,11 @@ def objective(trial, X_train, y_train, X_val, y_val, n_est_min, n_est_max, depth
         weights = generate_sample_weights(X_train, y_train, weight_strategy, upset_weight)
         
         with parallel_backend("threading"):
-            if variant == "rotation_forest":
-                clf.fit(X_t_processed, y_train)
-            else:
-                clf.fit(X_t_processed, y_train, sample_weight=weights)
+            clf.fit(X_t_processed, y_train, sample_weight=weights)
             val_preds = clf.predict(X_v_processed)
             
         return accuracy_score(y_val, val_preds)
         
-    
-
     # WALK-FORWARD (TSCV)
     elif validation == "walk_forward":
         tscv = TimeSeriesSplit(n_splits=n_splits, test_size=tscv_test_size)
@@ -279,21 +204,18 @@ def objective(trial, X_train, y_train, X_val, y_val, n_est_min, n_est_max, depth
                 v_distances = kmeans.transform(X_v_processed)
                 X_t_processed = np.hstack((X_t_processed, t_distances))
                 X_v_processed = np.hstack((X_v_processed, v_distances))  
-            # ---> GENERATE AND APPLY WEIGHTS FOR THIS FOLD
+                
+            # GENERATE AND APPLY WEIGHTS FOR THIS FOLD
             weights_cv = generate_sample_weights(X_t_cv, y_t_cv, weight_strategy, upset_weight)
             
             with parallel_backend("threading"):
-                if variant == "rotation_forest":
-                    clf.fit(X_t_processed, y_t_cv)
-                else:
-                    clf.fit(X_t_processed, y_t_cv, sample_weight=weights_cv)
+                clf.fit(X_t_processed, y_t_cv, sample_weight=weights_cv)
                 val_preds = clf.predict(X_v_processed)
             
             fold_accuracies.append(accuracy_score(y_v_cv, val_preds))
             
         return np.mean(fold_accuracies)
 
-# (plot_optuna_history stays exactly the same)
 def plot_optuna_history(study, save_path):
     plt.figure(figsize=(10, 6))
     trials = study.trials_dataframe()
@@ -307,7 +229,6 @@ def plot_optuna_history(study, save_path):
         plt.savefig(save_path / "optuna_optimization_history.png", dpi=300)
     plt.close()
 
-# ---> ADDED add_pca ARGUMENT
 def run_rf_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir, 
                     n_trials=30, n_est_min=50, n_est_max=500, depth_min=5, depth_max=50, 
                     variant="rf", add_pca=False, add_kmeans=False, n_clusters=5, validation="holdout",
@@ -344,6 +265,7 @@ def run_rf_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
         X_train_processed = X_train_scaled
         if X_val_scaled is not None:
             X_val_processed = X_val_scaled
+            
     if add_kmeans:
         print(f"Applying KMeans clustering (k={n_clusters}) for {variant.upper()}...")
         kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto')
@@ -356,6 +278,7 @@ def run_rf_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
             
         kmeans_path = output_dir / f"{variant}_kmeans.joblib"
         joblib.dump(kmeans, kmeans_path)
+        
     optuna.logging.set_verbosity(optuna.logging.INFO)
     db_path = output_dir / f"{variant}_sklearn_optuna.db"
     study_name = f"{variant}_optimization_{output_dir.name}"
@@ -368,7 +291,6 @@ def run_rf_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
         direction="maximize"
     )
     
-    # ---> PASSED upset_weight TO THE OBJECTIVE FUNCTION
     print(f"\nStarting Optuna search ({n_trials} trials | Variant: {variant.upper()} | Strategy: {weight_strategy.upper()} | Base Wt: {upset_weight})...")
     
     study.optimize(
@@ -383,103 +305,88 @@ def run_rf_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
         final_clf = ExtraTreesClassifier(**best_params, random_state=42, n_jobs=-1)
     elif variant == "rrf":
         final_clf = RandomForestClassifier(**best_params, random_state=42, n_jobs=-1)
-    elif variant == "rotation_forest":
-        final_clf = RotationForestClassifier(**best_params, random_state=42)
     elif variant == "oblique":
         final_clf = ObliqueRandomForestClassifier(**best_params, random_state=42, n_jobs=-1)
     elif variant == "weighted":
-        # It takes standard RF parameters, so Optuna tunes it exactly like a normal RF
         final_clf = WeightedRandomForestClassifier(**best_params, random_state=42, n_jobs=-1)
     else:
         final_clf = RandomForestClassifier(**best_params, random_state=42, n_jobs=-1)
+    print("\nTraining final model on combined dataset...")
+    if X_val is not None:
+        X_final = pd.concat([X_train, X_val], ignore_index=True)
+        y_final = pd.concat([y_train, y_val], ignore_index=True)
+    else:
+        X_final, y_final = X_train, y_train
 
-        # ==========================================
-        # FINAL TRAINING CÓ GỘP DỮ LIỆU
-        # ==========================================
-        print("\nTraining final model on combined dataset...")
-        if X_val is not None:
-            X_final = pd.concat([X_train, X_val], ignore_index=True)
-            y_final = pd.concat([y_train, y_val], ignore_index=True)
-        else:
-            X_final, y_final = X_train, y_train
+    # 1. Re-Scale & Dump
+    X_final_scaled = scaler.fit_transform(X_final)
+    joblib.dump(scaler, scaler_path)
 
-        # 1. Re-Scale & Dump
-        X_final_scaled = scaler.fit_transform(X_final)
-        joblib.dump(scaler, scaler_path)
+    # 2. Re-PCA & Dump
+    if add_pca:
+        X_final_processed = pca.fit_transform(X_final_scaled)
+        joblib.dump(pca, output_dir / f"{variant}_pca.joblib")
+    else:
+        X_final_processed = X_final_scaled
 
-        # 2. Re-PCA & Dump
-        if add_pca:
-            X_final_processed = pca.fit_transform(X_final_scaled)
-            joblib.dump(pca, output_dir / f"{variant}_pca.joblib")
-        else:
-            X_final_processed = X_final_scaled
+    # 3. Re-KMeans & Dump
+    if add_kmeans:
+        t_distances = kmeans.fit_transform(X_final_processed)
+        X_final_processed = np.hstack((X_final_processed, t_distances))
+        joblib.dump(kmeans, output_dir / f"{variant}_kmeans.joblib")
 
-        # 3. Re-KMeans & Dump
-        if add_kmeans:
-            t_distances = kmeans.fit_transform(X_final_processed)
-            X_final_processed = np.hstack((X_final_processed, t_distances))
-            joblib.dump(kmeans, output_dir / f"{variant}_kmeans.joblib")
+    # 4. Generate Weights & Fit Model
+    final_weights = generate_sample_weights(X_final, y_final, weight_strategy, upset_weight)
 
-        # 4. Tạo Weights & Fit Model trên tập đã gộp
-        final_weights = generate_sample_weights(X_final, y_final, weight_strategy, upset_weight)
+    with parallel_backend("threading"):
+        final_clf.fit(X_final_processed, y_final.values, sample_weight=final_weights)
 
-        with parallel_backend("threading"):
-            if variant == "rotation_forest":
-                final_clf.fit(X_final_processed, y_final.values)
-            else:
-                final_clf.fit(X_final_processed, y_final.values, sample_weight=final_weights)
+    # OVERFITTING DIAGNOSTIC
+    train_preds = final_clf.predict(X_final_processed)
+    train_acc = accuracy_score(y_final, train_preds)
 
-        # OVERFITTING DIAGNOSTIC
-        # Test trên X_final_processed thay vì X_train_processed
-        train_preds = final_clf.predict(X_final_processed)
-        train_acc = accuracy_score(y_final, train_preds)
+    print("\n" + "-" * 30)
+    print(" OVERFITTING CHECK")
+    print("-" * 30)
+    print(f"Training Accuracy:     {train_acc * 100:.2f}%")
+    print(f"Optuna Val Accuracy:   {study.best_value * 100:.2f}%")
 
-        print("\n" + "-" * 30)
-        print(" OVERFITTING CHECK")
-        print("-" * 30)
-        print(f"Training Accuracy:     {train_acc * 100:.2f}%")
-        print(f"Optuna Val Accuracy:   {study.best_value * 100:.2f}%")
+    if (train_acc - study.best_value) > 0.10:
+        print(" WARNING: High likelihood of overfitting. The model is memorizing the training data.")
+        print(" TIP: Try lowering --rf_depth_max or increasing min_samples_split.")
+    print("-" * 30 + "\n")
 
-        # If the model scores >10% better on the training set, it is memorizing data
-        if (train_acc - study.best_value) > 0.10:
-            print(" WARNING: High likelihood of overfitting. The model is memorizing the training data.")
-            print(" TIP: Try lowering --rf_depth_max or increasing min_samples_split.")
-        print("-" * 30 + "\n")
+    joblib.dump(final_clf, model_path)
 
-        joblib.dump(final_clf, model_path)
+    # DYNAMIC FEATURE NAMES
+    if add_pca:
+        n_pcs = X_final_processed.shape[1] - (n_clusters if add_kmeans else 0)
+        final_feature_names = [f"PC{i + 1}" for i in range(n_pcs)]
+    else:
+        final_feature_names = list(X_final.columns)
 
-        # ---> DYNAMIC FEATURE NAMES IF PCA IS ENABLED
-        if add_pca:
-            # Subtract the KMeans columns to get the true number of Principal Components
-            n_pcs = X_final_processed.shape[1] - (n_clusters if add_kmeans else 0)
-            final_feature_names = [f"PC{i + 1}" for i in range(n_pcs)]
-        else:
-            # Lấy tên cột từ X_final
-            final_feature_names = list(X_final.columns)
+    if add_kmeans:
+        kmeans_names = [f"K-Means_Dist_C{i + 1}" for i in range(n_clusters)]
+        final_feature_names.extend(kmeans_names)
 
-        # Append the new Clustering features to the name list so they match the coefficients
-        if add_kmeans:
-            kmeans_names = [f"K-Means_Dist_C{i + 1}" for i in range(n_clusters)]
-            final_feature_names.extend(kmeans_names)
+    config = {
+        "model_type": variant.upper(),
+        "optimizer": "Optuna",
+        "best_params": best_params,
+        "train_accuracy": train_acc,
+        "val_accuracy": study.best_value,
+        "pca_applied": add_pca,
+        "kmeans_applied": add_kmeans,
+        "n_clusters": n_clusters if add_kmeans else 0,
+        "weight_strategy": weight_strategy,
+        "upset_weight": upset_weight,
+        "features_used": final_feature_names
+    }
 
-        config = {
-            "model_type": variant.upper(),
-            "optimizer": "Optuna",
-            "best_params": best_params,
-            "train_accuracy": train_acc,
-            "val_accuracy": study.best_value,
-            "pca_applied": add_pca,
-            "kmeans_applied": add_kmeans,
-            "n_clusters": n_clusters if add_kmeans else 0,
-            "weight_strategy": weight_strategy,
-            "upset_weight": upset_weight,
-            "features_used": final_feature_names
-        }
+    with open(output_dir / f"{variant}_config.json", "w") as f:
+        json.dump(config, f, indent=4)
 
-        with open(output_dir / f"{variant}_config.json", "w") as f:
-            json.dump(config, f, indent=4)
+    print("Generating plots...")
+    plot_optuna_history(study, reports_dir)
 
-        print("Generating plots...")
-        plot_optuna_history(study, reports_dir)
-
-        return final_clf, scaler
+    return final_clf, scaler

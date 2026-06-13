@@ -22,10 +22,7 @@ def plot_ga_results(evolved_estimator, reports_dir):
         return
 
     generations = history["gen"]
-
-    # Since scoring='neg_log_loss' (negative number), we multiply by -1 to convert it to standard Log Loss (positive).
-    # The lower the Log Loss, the better the model.
-    best_log_loss = [-x for x in history["fitness_max"]]  # fitness_max of a negative number is the value closest to 0
+    best_log_loss = [-x for x in history["fitness_max"]]  
     mean_log_loss = [-x for x in history["fitness"]]  # mean log loss of population
 
     plt.figure(figsize=(10, 6))

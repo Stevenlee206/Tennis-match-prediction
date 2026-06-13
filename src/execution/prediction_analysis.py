@@ -5,9 +5,6 @@ import seaborn as sns
 from pathlib import Path
 from sklearn.metrics import confusion_matrix
 
-
-# Testing the hypothesis of class bias
-# Does the model have a biased tendency, always predicting player 1 (the favorite) to win?
 def plot_prediction_summary(y_true: np.ndarray | pd.Series,
                             y_pred: np.ndarray | pd.Series,
                             out_dir: str | Path,
@@ -141,9 +138,6 @@ def plot_error_by_feature(
     plt.close()
     if verbose:
         print(f"[*] The error analysis chart based on {feature_name} has been saved at : {save_path.name}")
-
-
-# LOOP TO ANALYZE ALL FEATURES
 
 def plot_all_features_errors(
         X_raw: pd.DataFrame,

@@ -60,7 +60,6 @@ def train_knn():
         X_va, y_va = extract_numpy_data(val_loader)
         
         for k_idx, k in enumerate(K_FIND_RANGE):
-            # Dùng Sklearn cho CV để chạy siêu nhanh (chỉ mất ~0.1s mỗi fold)
             knn_cv = KNeighborsClassifier(n_neighbors=k, metric='euclidean')
             knn_cv.fit(X_tr, y_tr)
             y_pred = knn_cv.predict(X_va)

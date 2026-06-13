@@ -31,8 +31,7 @@ def plot_random_results(random_search, reports_dir):
 
     for i, target_param in enumerate(tuned_params):
         ax = axes[i]
-        # With Random Search, the space is more scattered, so we draw a Scatter (dots) instead of a Line.
-        x = cv_results[f'param_{target_param}'].astype(float)  # Make sure the X-axis is a number.
+        x = cv_results[f'param_{target_param}'].astype(float) 
         y = -cv_results['mean_test_score']
 
         ax.scatter(x, y, alpha=0.6, color='teal', s=40)
@@ -41,10 +40,7 @@ def plot_random_results(random_search, reports_dir):
         ax.set_xlabel(target_param, fontsize=10)
         ax.set_ylabel("Log Loss (Lower is better)", fontsize=10)
         ax.grid(True, linestyle='--', alpha=0.7)
-
-        # Best point
         best_x = best_params[target_param]
-        # Find the index of the row containing best_params
         best_idx = random_search.best_index_
         best_y = y.iloc[best_idx]
         ax.scatter(best_x, best_y, color='red', s=150, marker='s', edgecolor='black', label='Best Value', zorder=5)

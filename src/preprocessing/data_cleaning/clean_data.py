@@ -7,12 +7,8 @@ def drop_high_missing_columns(df: pd.DataFrame, train_idx: int, threshold: float
     leakage before applying the drop to the entire dataset.
     """
     data = df.copy()
-    # FIT: calculate missing ratio strictly on the train pool
     missing_ratio = data.iloc[:train_idx].isnull().mean()
-    # TRANSFORM
     cols_to_drop = missing_ratio[missing_ratio > threshold].index.tolist()
-    
-    # Protect columns that are essential for future feature generation
     protected_cols = ['minutes', 'w_bpSaved', 'w_bpFaced', 'l_bpSaved', 'l_bpFaced']
     cols_to_drop = [c for c in cols_to_drop if c not in protected_cols]
     
@@ -27,33 +23,25 @@ def fill_missing_values(df: pd.DataFrame, train_idx: int) -> pd.DataFrame:
         data[f'{col}_missing'] = data[col].isna().astype(int)
 
     for col in ['winner_rank', 'loser_rank', 'winner_rank_points', 'loser_rank_points']:
-        # FIT
         surf_meds = train_slice.groupby('surface')[col].median()
         glob_med = train_slice[col].median()
-        # TRANSFORM
         data[col] = data.apply(
             lambda row: surf_meds.get(row['surface'], glob_med) if pd.isna(row[col]) else row[col], axis=1
         )
 
     for col in ['winner_ht', 'loser_ht']:
         ioc_col = col.replace('_ht', '_ioc')
-        # FIT
         ioc_meds = train_slice.groupby(ioc_col)[col].median()
         glob_med = train_slice[col].median()
-        # TRANSFORM
         data[col] = data.apply(
             lambda row: ioc_meds.get(row.get(ioc_col, 'Unknown'), glob_med) if pd.isna(row[col]) else row[col], axis=1
         )
-    # Age is median by default
     for col in ['winner_age', 'loser_age']:
         data[col] = data[col].fillna(train_slice[col].median())
 
     data['surface'] = data['surface'].fillna('Unknown')
-    # Hand is Right by default
     data['winner_hand'] = data['winner_hand'].fillna('R')
     data['loser_hand']  = data['loser_hand'].fillna('R')
-
-    # (Note: dropna(subset=stat_cols) was removed here, we do it in preprocessing.py now)
     return data
 
 def remove_leaky_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -85,7 +73,6 @@ def remove_leaky_columns(df: pd.DataFrame) -> pd.DataFrame:
     existing_drops = [c for c in cols_to_drop if c in df.columns]
     data = df.drop(columns=existing_drops)
     return data
-# unused meta data removing
 def remove_unused_data(data: pd.DataFrame) -> pd.DataFrame:
     COLS_TO_DROP = ['tourney_id', 'draw_size', 'tourney_date', 'match_num', 'rank_age_interaction',
         'winner_elo', 'loser_elo', 'winner_rank_missing', 'loser_rank_missing']

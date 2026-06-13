@@ -19,13 +19,11 @@ def plot_grid_results(grid_search, reports_dir):
     cv_results.columns = [col.replace('param_model__', 'param_') for col in cv_results.columns]
     tuned_params = list(best_params.keys())
 
-    # The grid layout (Subplots) is calculated automatically based on the number of parameters.
     n_params = len(tuned_params)
     cols = 2 if n_params >= 2 else 1
     rows = (n_params + cols - 1) // cols
 
     fig, axes = plt.subplots(rows, cols, figsize=(14, 5 * rows))
-    # Ensure axes are always a one-dimensional array for easier iteration (even with only one parameter).
     axes = np.atleast_1d(axes).flatten()
 
     # Plot each chart
@@ -47,7 +45,6 @@ def plot_grid_results(grid_search, reports_dir):
         else:
             filtered_df = cv_results.copy()
 
-        # Arrange the X-axis from smallest to largest so that the line doesn't break diagonally.
         filtered_df = filtered_df.sort_values(f'param_{target_param}')
 
         x = filtered_df[f'param_{target_param}']

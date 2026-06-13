@@ -26,7 +26,6 @@ def plot_grid_results(grid_search, reports_dir):
     rows = (n_params + 1) // 2
 
     fig, axes = plt.subplots(rows, cols, figsize=(14, 5 * rows))
-    # Ensure axes are always a one-dimensional array for easier iteration (even with only one parameter).
     axes = np.atleast_1d(axes).flatten()
 
     # Plot each chart
@@ -48,7 +47,6 @@ def plot_grid_results(grid_search, reports_dir):
         else:
             filtered_df = cv_results.copy()
 
-        # Arrange the X-axis from smallest to largest so that the line doesn't break diagonally.
         filtered_df = filtered_df.sort_values(f'param_{target_param}')
 
         x = filtered_df[f'param_{target_param}']

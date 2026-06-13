@@ -49,10 +49,8 @@ def tune_n_estimators(X_train, y_train, X_val,
             fold_t_loss, fold_v_loss = [], []
 
             for train_idx, val_idx in tscv.split(X_train):
-                # Cast data to a NumPy array or handle indexes safely if passing a NumPy array from Scaler.
                 X_tr = X_train.iloc[train_idx] if hasattr(X_train, 'iloc') else X_train[train_idx]
                 X_v = X_train.iloc[val_idx] if hasattr(X_train, 'iloc') else X_train[val_idx]
-                # y_train might still be Pandas Series, requiring an iloc or conversion to NumPy.
                 y_tr = y_train.iloc[train_idx] if hasattr(y_train, 'iloc') else y_train[train_idx]
                 y_v = y_train.iloc[val_idx] if hasattr(y_train, 'iloc') else y_train[val_idx]
 
@@ -69,7 +67,6 @@ def tune_n_estimators(X_train, y_train, X_val,
             val_scores.append(v_loss)
             print(f"Estimators: {n:3} | CV Train LogLoss: {t_loss:.4f} | CV Val LogLoss: {v_loss:.4f}")
 
-    # Use the minimum instead of the maximum because the smaller the log loss, the better.
     best_idx = np.argmin(val_scores)
     best_n = n_range[best_idx]
     best_val_loss = val_scores[best_idx]
@@ -140,8 +137,6 @@ def run_xgboost_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir
         X_train, y_train, X_val, y_val,
         n_estimators_range, learning_rate, max_depth, reports_dir,n_splits
     )
-
-    # Merge data and train final model
     print(f"\n Train final model with n_estimators={best_n}...")
     if X_val is not None:
         X_final_raw = pd.concat([X_train, X_val])

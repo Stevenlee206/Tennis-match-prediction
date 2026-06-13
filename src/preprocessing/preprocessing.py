@@ -30,7 +30,6 @@ class Preprocessing:
         self.data = pd.concat(dfs, axis=0, ignore_index=True)
         return self.data
     
-    # Update: Accept train_ratio dynamically
     def run(self, train_ratio=0.64):
         data = self._load()
         # Delete error records
@@ -41,7 +40,6 @@ class Preprocessing:
             data['tourney_date'] = pd.to_datetime(data['tourney_date'], format='%Y%m%d', errors='coerce')
         data = data.sort_values('tourney_date').reset_index(drop=True)
 
-        # Calculate Train Split Threshold based on dynamic ratio
         train_split_idx = int(len(data) * train_ratio)
 
         data = drop_high_missing_columns(data, train_split_idx, threshold=CLEAN_THRESHOLD)
@@ -63,7 +61,6 @@ class Preprocessing:
         data = remove_unused_data(data)
         data = encode_categorical_features(data)
 
-        # --- UPDATED: Recalculate based on ratio (ratio holds true even after augmentation doubles size) ---
         current_train_idx = int(len(data) * train_ratio)
 
         data = feature_selection(data, current_train_idx, k=50)

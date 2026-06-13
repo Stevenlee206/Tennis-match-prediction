@@ -5,22 +5,15 @@ def create_target(df: pd.DataFrame, random_state: int = 42, augment: bool = True
     data = df.copy()
 
     if augment:
-        # Tag the original and duplicate datasets
         original = data.copy()
         original['is_augmented'] = 0
         
         duplicate = data.copy()
         duplicate['is_augmented'] = 1
-        
-        # Interleave perfectly: [Row0(orig), Row0(aug), Row1(orig), Row1(aug)...]
         data = pd.concat([original, duplicate]).sort_index(kind='stable').reset_index(drop=True)
-        
-        # Create random signs for the base matches
         np.random.seed(random_state)
         num_matches = len(data) // 2
         base_signs = np.random.choice([1, -1], size=num_matches)
-        
-        #  Assign base sign to original, opposite to duplicate
         sign = np.empty(len(data), dtype=int)
         sign[0::2] = base_signs       # Originals get the random sign
         sign[1::2] = -base_signs      # Duplicates get the flipped sign
@@ -50,7 +43,6 @@ def create_target(df: pd.DataFrame, random_state: int = 42, augment: bool = True
         if w_col in data.columns and l_col in data.columns:
             data[new_col] = (data[w_col] - data[l_col]) * sign
 
-    # Pre-calculated diffs (Just multiply by sign)
     elo_form_matchup_cols = [
         'elo_diff', 'elo_hard_diff', 'elo_clay_diff', 'elo_grass_diff', 
         'glicko2_diff', 'glicko2_hard_diff', 'glicko2_clay_diff', 'glicko2_grass_diff', 
