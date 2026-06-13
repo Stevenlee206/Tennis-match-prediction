@@ -48,8 +48,8 @@ def run_decision_tree_unlimited_pipeline(X_train, y_train, X_val, y_val, output_
         "model_type": "DecisionTree_Unlimited_Baseline",
         "best_params": {"max_depth": None, "min_samples_split": 2, "min_samples_leaf": 1},
         "tree_stats": {
-            "depth": int(final_clf.get_depth()),  # <-- Đã sửa
-            "n_leaves": int(final_clf.get_n_leaves())  # <-- Đã sửa
+            "depth": int(final_clf.get_depth()),
+            "n_leaves": int(final_clf.get_n_leaves())
         }
     }
 

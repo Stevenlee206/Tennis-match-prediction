@@ -86,6 +86,7 @@ def run_xgboost_grid_pipeline(X_train, y_train, X_val, y_val, output_dir, report
                               xgb_grid_max_depth=[3, 5, 8],
                               xgb_grid_lr=[0.01, 0.05, 0.1],
                               xgb_grid_colsample=[0.6,0.8, 1.0],
+                              xgb_grid_gamma=[0.0, 0.5, 1.0, 1.5, 2.0],
                               xgb_grid_subsample=[0.6, 0.8, 1.0],
                               validation="holdout", n_splits=5, tscv_test_size=None, **kwargs):
     output_dir, reports_dir = Path(output_dir), Path(reports_dir)
@@ -117,7 +118,8 @@ def run_xgboost_grid_pipeline(X_train, y_train, X_val, y_val, output_dir, report
         'model__max_depth': xgb_grid_max_depth,
         'model__learning_rate': xgb_grid_lr,
         'model__colsample_bytree': xgb_grid_colsample,
-        'model__subsample': xgb_grid_subsample
+        'model__subsample': xgb_grid_subsample,
+        'model__gamma': xgb_grid_gamma
     }
 
     if validation == "holdout" and X_val is not None:
