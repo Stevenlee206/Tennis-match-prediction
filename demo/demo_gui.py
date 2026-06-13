@@ -7,8 +7,6 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 import torch
-from sklearn.metrics import classification_report
-
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext, filedialog
 
@@ -22,6 +20,25 @@ from main import evaluate_model_bias
 from src.models.svm.svm_pytorch_optuna import PyTorchLinearSVM
 
 
+class StdoutRedirector:
+    """Safely redirects standard output (sys.stdout) streams into a Tkinter text component."""
+    def __init__(self, text_widget):
+        self.text_widget = text_widget
+
+    def write(self, string):
+        # Schedule the UI update safely on the main thread
+        self.text_widget.after(0, self._insert_text, string)
+
+    def _insert_text(self, string):
+        self.text_widget.config(state='normal')
+        self.text_widget.insert(tk.END, string)
+        self.text_widget.see(tk.END)
+        self.text_widget.config(state='disabled')
+
+    def flush(self):
+        pass  # Required for file-like interface compliance
+
+
 class TennisInferenceGUI:
     def __init__(self, root):
         self.root = root
@@ -29,7 +46,6 @@ class TennisInferenceGUI:
         self.root.geometry("780x750")
         
         # --- Apply Custom Colors & Styling ---
-        self.root.configure(bg="#F0F4F8")
         self.style = ttk.Style()
         self.style.theme_use('clam')
         
@@ -69,6 +85,9 @@ class TennisInferenceGUI:
         self.expected_base_features = None
 
         self._build_ui()
+        
+        # --- Redirect Stdout to UI Console Tool ---
+        sys.stdout = StdoutRedirector(self.result_text)
 
     def _build_ui(self):
         main_frame = ttk.Frame(self.root, padding=20)
@@ -114,7 +133,7 @@ class TennisInferenceGUI:
 
         ttk.Separator(main_frame, orient='horizontal').pack(fill=tk.X, pady=10)
 
-        # --- NEW SECTION: Upset Match Miner ---
+        # --- Section 4: Upset Match Miner ---
         ttk.Label(main_frame, text="4. Dynamic Upset Analysis (Lower Elo Wins)", style='Header.TLabel').pack(anchor=tk.W, pady=(0, 5))
         upset_frame = ttk.Frame(main_frame)
         upset_frame.pack(fill=tk.X, pady=5)
@@ -132,10 +151,9 @@ class TennisInferenceGUI:
         self.result_text.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
 
     def log_message(self, message):
-        self.result_text.config(state='normal')
-        self.result_text.insert(tk.END, message + "\n")
-        self.result_text.see(tk.END)
-        self.result_text.config(state='disabled')
+        # Standard print now goes automatically to UI via redirection, 
+        # but we preserve this for backward compatibility or explicit lines.
+        print(message)
 
     def browse_model(self):
         initial_dir = os.path.join(project_root, "weights")
@@ -172,7 +190,7 @@ class TennisInferenceGUI:
             matches_up_to_2024 = raw_data[raw_data['year'] <= 2024]
             frozen_ratio = int(len(matches_up_to_2024) * 0.90) / len(raw_data)
             
-            self.root.after(0, self.log_message, f"Running Preprocessing Pipeline...")
+            print("Running Preprocessing Pipeline...")
             data = prep.run(train_ratio=frozen_ratio)
 
             df_2026 = data[data['year'] == 2026].copy()
@@ -184,7 +202,6 @@ class TennisInferenceGUI:
             except KeyError:
                 self.df_2026_raw = raw_data[raw_data['year'] == 2026].iloc[:len(df_2026)].copy()
 
-            # Keep a backup of columns that might contain rolling engineered Elo ratings
             self.df_2026_processed_all = df_2026.copy()
 
             self.y_2026 = df_2026['target'].values
@@ -231,7 +248,7 @@ class TennisInferenceGUI:
 
     def _on_loading_complete(self):
         self.lbl_status.config(text=f"Status: Ready. Loaded {len(self.X_2026)} matches.", foreground="#00A388")
-        self.log_message("\n✅ Pipeline Components Loaded Successfully!\n")
+        print("\n✅ Pipeline Components Loaded Successfully!\n")
         
         match_options = []
         for i in range(len(self.X_2026)):
@@ -262,7 +279,6 @@ class TennisInferenceGUI:
         return np.hstack((X_p, self.svm_dist_scaler.transform(self.kmeans.transform(X_p))))
 
     def _run_inference_on_row(self, idx, single_X):
-        """Internal worker to execute inference based on loaded architecture type."""
         if self.model_type == "RF":
             X_proc = self._transform_rf(single_X)
             pred = self.model.predict(X_proc)[0]
@@ -285,26 +301,22 @@ class TennisInferenceGUI:
         
         pred, win_prob = self._run_inference_on_row(idx, self.X_2026.iloc[[idx]])
         
-        self.log_message(f"\n▶ Analyzing: {match_info}")
-        self.log_message(f"  Target Truth: {'WIN (1)' if actual_target == 1 else 'LOSS (0)'}")
-        self.log_message(f"  Model Predicted: {'WIN (1)' if pred == 1 else 'LOSS (0)'} (Confidence: {win_prob:.1f}%)")
-        self.log_message(f"  Result: {'✅ CORRECT' if pred == actual_target else '❌ INCORRECT'}")
-        self.log_message("-" * 55)
+        print(f"\n▶ Analyzing: {match_info}")
+        print(f"  Target Truth: {'WIN (1)' if actual_target == 1 else 'LOSS (0)'}")
+        print(f"  Model Predicted: {'WIN (1)' if pred == 1 else 'LOSS (0)'} (Confidence: {win_prob:.1f}%)")
+        print(f"  Result: {'✅ CORRECT' if pred == actual_target else '❌ INCORRECT'}")
+        print("-" * 55)
 
     def analyze_upsets(self):
-        """Mines dataset for instances where lower Elo player wins and loops individual inferences."""
         try:
             max_upsets = int(self.txt_upset_val.get().strip())
         except ValueError:
             messagebox.showerror("Error", "Please enter a valid integer for max upset matches.")
             return
 
-        self.log_message(f"\n⚡ Mining 2026 Table for top {max_upsets} Elo Upsets...")
+        print(f"\n⚡ Mining 2026 Table for top {max_upsets} Elo Upsets...")
 
-        # Find rolling Elo features inside processed table columns
         elo_cols = [c for c in self.df_2026_processed_all.columns if 'elo' in c.lower()]
-        
-        # Determine tracking keys based on how your preprocessing names them (e.g., winner_elo vs loser_elo, or p1_elo vs p2_elo)
         w_elo_key = next((c for c in elo_cols if 'winner' in c or 'w_' in c), None)
         l_elo_key = next((c for c in elo_cols if 'loser' in c or 'l_' in c), None)
 
@@ -312,33 +324,30 @@ class TennisInferenceGUI:
         elo_margins = []
 
         if w_elo_key and l_elo_key:
-            # Case A: Explicit winner/loser tracking metrics
             for i in range(len(self.df_2026_processed_all)):
                 w_elo = self.df_2026_processed_all.iloc[i][w_elo_key]
                 l_elo = self.df_2026_processed_all.iloc[i][l_elo_key]
-                if w_elo < l_elo:  # Lower Elo player wins
+                if w_elo < l_elo:
                     upset_indices.append(i)
                     elo_margins.append(l_elo - w_elo)
         else:
-            # Case B: Fallback calculation using standard rank differences from raw data
-            self.log_message("[System Note] No distinct Elo components identified. Cascading to raw ATP rank differences...")
+            print("[System Note] No distinct Elo components identified. Cascading to raw ATP rank differences...")
             for i in range(len(self.df_2026_raw)):
                 w_rank = pd.to_numeric(self.df_2026_raw.iloc[i].get('winner_rank'), errors='coerce')
                 l_rank = pd.to_numeric(self.df_2026_raw.iloc[i].get('loser_rank'), errors='coerce')
-                if pd.notna(w_rank) and pd.notna(l_rank) and w_rank > l_rank: # Higher rank number = Lower standing
+                if pd.notna(w_rank) and pd.notna(l_rank) and w_rank > l_rank:
                     upset_indices.append(i)
                     elo_margins.append(w_rank - l_rank)
 
         if not upset_indices:
-            self.log_message("❌ No clear upset matches matching criteria found in current 2026 configuration.")
+            print("❌ No clear upset matches matching criteria found in current 2026 configuration.")
             return
 
-        # Sort indices according to the highest deficit margin
         sorted_arr = np.argsort(elo_margins)[::-1][:max_upsets]
         target_indices = [upset_indices[idx] for idx in sorted_arr]
 
-        self.log_message(f" Found {len(target_indices)} upset rows. Sequential match-by-match log:")
-        self.log_message("=" * 65)
+        print(f" Found {len(target_indices)} upset rows. Sequential match-by-match log:")
+        print("=" * 65)
 
         for match_idx in target_indices:
             raw_row = self.df_2026_raw.iloc[match_idx]
@@ -351,14 +360,14 @@ class TennisInferenceGUI:
             
             match_status = "✅ MODEL CAUGHT IT" if pred == actual_target else "❌ MODEL FOOLED BY UPSET"
             
-            self.log_message(f"▶ Upset Row #{match_idx}: {w_name} def. {l_name}")
-            self.log_message(f"  Venue: {tourney} | Target Label: {actual_target}")
-            self.log_message(f"  Model Predicted: {'WIN (1)' if pred == 1 else 'LOSS (0)'} ({win_prob:.1f}% confidence)")
-            self.log_message(f"  Evaluation: {match_status}")
-            self.log_message("-" * 65)
+            print(f"▶ Upset Row #{match_idx}: {w_name} def. {l_name}")
+            print(f"  Venue: {tourney} | Target Label: {actual_target}")
+            print(f"  Model Predicted: {'WIN (1)' if pred == 1 else 'LOSS (0)'} ({win_prob:.1f}% confidence)")
+            print(f"  Evaluation: {match_status}")
+            print("-" * 65)
 
     def run_full_evaluation(self):
-        self.log_message(f"\n--- Running Full Batch Evaluation ({self.model_type}) ---")
+        print(f"\n--- Running Full Batch Evaluation ({self.model_type}) ---")
         if self.model_type == "RF":
             X_processed = self._transform_rf(self.X_2026)
             y_pred = self.model.predict(X_processed)
@@ -370,8 +379,8 @@ class TennisInferenceGUI:
                 y_prob = torch.sigmoid(self.model(X_tensor)).cpu().numpy().flatten()
                 y_pred = (y_prob >= 0.5).astype(int)
 
-        report = classification_report(self.y_2026, y_pred, target_names=["Loss (0)", "Win (1)"], digits=4)
-        self.log_message("\nClassification Report:\n" + report)
+              
+        # This will now write directly into your UI ScrolledText widget!
         evaluate_model_bias(self.y_2026, y_pred, self.X_2026, y_prob=y_prob)
 
 
