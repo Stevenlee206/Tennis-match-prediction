@@ -31,6 +31,8 @@ def _get_file_names(args):
     elif args.model == "naive_bayes":
 
         return "nb_model.joblib", "nb_scaler.joblib", "nb_config.json"
+    elif args.model == "preco":
+        return "pc_model.pt", "pc_scaler.joblib", "pc_config.json"
     else:  # Random Forest variants
         return f"{args.rf_variant}_model.joblib", f"{args.rf_variant}_scaler.joblib", f"{args.rf_variant}_config.json"
 
@@ -40,7 +42,9 @@ def _get_feature_prefix(args):
     """
     Define the filename prefix for PCA and K-Means.
     """
-    if args.model in ["pytorch_svm", "pytorch_mlp", "tabnet", "deepforest"]:
+    if args.model == "preco":
+        return "pc"
+    elif args.model in ["pytorch_svm", "pytorch_mlp", "tabnet", "deepforest"]:
         return args.model.replace('pytorch_', '') + '_pytorch' if 'pytorch' in args.model else args.model
     elif args.model == "svm":
         return "svm_sgd" if args.mode == "sgd" else args.kernel
@@ -112,6 +116,33 @@ def load_and_evaluate_model(args, X_eval, y_eval, out_dir):
             preds_raw = model(tensor_X)
             y_pred = (preds_raw > 0).cpu().numpy().astype(int).flatten()
             y_prob = torch.sigmoid(preds_raw).cpu().numpy().flatten()
+    elif args.model == "preco":
+        import torch
+        from src.models.preco.pc_network_torch import PredictiveCodingNetworkTorch, PCNetworkConfig
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        
+        # Load config to retrieve hidden_sizes
+        with open(config_path, 'r') as f:
+            config_dict = json.load(f)
+            
+        model_params = config_dict.get('model_params', {})
+        hidden_sizes = model_params.get('hidden_sizes', [64, 32])
+        layer_sizes = [X_eval_scaled.shape[1]] + hidden_sizes + [1]
+        
+        best_params = config_dict.get('best_params', {})
+        cfg = PCNetworkConfig()
+        cfg.learning_rate = best_params.get('learning_rate', 0.001)
+        cfg.inference_lr = best_params.get('inference_lr', 0.05)
+        cfg.inference_steps = best_params.get('inference_steps', 20)
+        cfg.hidden_activation = best_params.get('hidden_activation', 'relu')
+        cfg.output_activation = 'sigmoid'
+        
+        model = PredictiveCodingNetworkTorch(layer_sizes=layer_sizes, cfg=cfg, device=device)
+        model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
+        
+        y_prob = model.predict_proba(X_eval_scaled)
+        y_pred = (y_prob >= 0.5).astype(int)
     else:
         # Load Sklearn / TabNet / DeepForest system models
         model = joblib.load(model_path)
@@ -145,7 +176,7 @@ def load_and_evaluate_model(args, X_eval, y_eval, out_dir):
             feature_names.extend(cluster_names)
 
         # Activating calculations and plotting graphs
-    if args.model not in ["pytorch_svm", "pytorch_mlp"]:
+    if args.model not in ["pytorch_svm", "pytorch_mlp", "preco"]:
         # calculate feature importance
         importances = calculate_feature_importances(
             model=model,

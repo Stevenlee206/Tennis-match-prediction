@@ -1,44 +1,11 @@
-from __future__ import annotations
-
-from typing import Dict
-
 import numpy as np
-
-
-def binary_classification_metrics(y_true: np.ndarray, y_prob: np.ndarray, threshold: float = 0.5) -> Dict[str, float]:
-	from sklearn.metrics import (
-		accuracy_score,
-		average_precision_score,
-		balanced_accuracy_score,
-		brier_score_loss,
-		f1_score,
-		log_loss,
-		precision_score,
-		recall_score,
-		roc_auc_score,
-	)
-
-	y_true = np.asarray(y_true).astype(int).reshape(-1)
-	y_prob = np.asarray(y_prob).astype(float).reshape(-1)
-	y_pred = (y_prob >= threshold).astype(int)
-
-	return {
-		"accuracy": float(accuracy_score(y_true, y_pred)),
-		"balanced_accuracy": float(balanced_accuracy_score(y_true, y_pred)),
-		"precision": float(precision_score(y_true, y_pred, zero_division=0)),
-		"recall": float(recall_score(y_true, y_pred, zero_division=0)),
-		"f1": float(f1_score(y_true, y_pred, zero_division=0)),
-		"roc_auc": float(roc_auc_score(y_true, y_prob)),
-		"pr_auc": float(average_precision_score(y_true, y_prob)),
-		"log_loss": float(log_loss(y_true, y_prob, labels=[0, 1])),
-		"brier": float(brier_score_loss(y_true, y_prob)),
-	}
+import pandas as pd
+from sklearn.metrics import accuracy_score, classification_report, precision_score, recall_score
 
 def evaluate_model_bias(y_true, y_pred, X_raw, dataset_name=""):
     """
-    Calculates bias metrics and returns them as a dictionary for JSON logging.
+    Calculates bias metrics and returns them as a dictionary.
     """
-    from sklearn.metrics import classification_report, accuracy_score
     print("\n" + "="*50)
     print(f" MODEL BIAS & HEURISTIC ANALYSIS {dataset_name}")
     print("="*50)
@@ -87,17 +54,31 @@ def evaluate_model_bias(y_true, y_pred, X_raw, dataset_name=""):
     
     return metrics
 
-def append_metrics_to_config(config_path, metrics):
-    """Safely appends bias metrics to the existing JSON config file."""
-    import json
-    from pathlib import Path
-    config_path = Path(config_path)
-    if config_path.exists():
-        with open(config_path, 'r') as f:
-            config = json.load(f)
+def evaluate_player_metrics(y_true, y_pred, df, selected_players):
+    """
+    Computes Acc, Recall, Precision specifically for target players.
+    """
+    print("\n--- PLAYER-SPECIFIC METRICS ---")
+    results = {}
+    
+    for cat, p_list in selected_players.items():
+        for player in p_list:
+            # Find matches where this player was involved
+            p_mask = (df['winner_name'] == player) | (df['loser_name'] == player)
+            if not p_mask.any():
+                print(f"{cat} | Player {player} not found in the evaluation dataset.")
+                continue
+                
+            p_y_true = y_true[p_mask]
+            p_y_pred = y_pred[p_mask]
             
-        config['bias_metrics'] = metrics
+            results[player] = {
+                'Accuracy': round(accuracy_score(p_y_true, p_y_pred) * 100, 2),
+                'Recall': round(recall_score(p_y_true, p_y_pred, zero_division=0) * 100, 2),
+                'Precision': round(precision_score(p_y_true, p_y_pred, zero_division=0) * 100, 2),
+                'Matches': p_mask.sum()
+            }
+            
+            print(f"{cat:<10} | {player:<30} | Matches: {p_mask.sum():<3} | Acc: {results[player]['Accuracy']}% | Rec: {results[player]['Recall']}% | Prec: {results[player]['Precision']}%")
         
-        with open(config_path, 'w') as f:
-            json.dump(config, f, indent=4)
-        print(f"[*] Bias metrics appended to {config_path.name}")
+    return results

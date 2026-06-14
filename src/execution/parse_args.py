@@ -15,7 +15,7 @@ def parse_arguments():
     model_group = parser.add_argument_group("Core Model & Feature Engineering")
     model_group.add_argument("--model", type=str,
                              choices=["svm", "rf", "pytorch_svm",
-                                      "xgboost","decisiontree","logistic_regression","naive_bayes"],
+                                      "xgboost","decisiontree","logistic_regression","naive_bayes", "preco"],
                              default="svm",help="Algorithm to use")
 
     model_group.add_argument("--add_kmeans", action="store_true",

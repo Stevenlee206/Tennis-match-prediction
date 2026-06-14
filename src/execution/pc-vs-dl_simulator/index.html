@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Predictive Coding vs Neural Network Simulation</title>
+        <style>
+            body {
+                font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                padding: 20px;
+                background-color: #e9ecef;
+            }
+            .container {
+                max-width: 900px;
+                margin: auto;
+                background: white;
+                padding: 25px;
+                border-radius: 10px;
+                box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            }
+            .controls {
+                margin-bottom: 20px;
+                padding: 15px;
+                background: #f8f9fa;
+                border-radius: 8px;
+                border: 1px solid #dee2e6;
+            }
+            .flex-row {
+                display: flex;
+                gap: 20px;
+                align-items: center;
+                flex-wrap: wrap;
+                margin-bottom: 15px;
+            }
+            .input-group {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                background: #fff;
+                padding: 5px 10px;
+                border: 1px solid #ccc;
+                border-radius: 5px;
+            }
+            input[type="number"] {
+                width: 80px;
+                padding: 5px;
+                border: 1px solid #aaa;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            button {
+                padding: 10px 15px;
+                cursor: pointer;
+                border: none;
+                border-radius: 5px;
+                background: #0d6efd;
+                color: white;
+                font-weight: bold;
+                transition: 0.2s;
+            }
+            button:hover {
+                background: #0b5ed7;
+            }
+            button:disabled {
+                background: #6c757d;
+                cursor: not-allowed;
+            }
+            .checkbox-group {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                font-weight: bold;
+                color: #dc3545;
+                background: #ffe6e6;
+                padding: 8px 12px;
+                border-radius: 5px;
+                cursor: pointer;
+            }
+            canvas {
+                border: 1px solid #ced4da;
+                background: #ffffff;
+                width: 100%;
+                height: 450px;
+                border-radius: 5px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h2 style="margin-top: 0">
+                Predictive Coding vs Neural Network Simulation
+            </h2>
+
+            <div class="controls">
+                <div class="flex-row">
+                    <label
+                        ><input
+                            type="radio"
+                            name="mode"
+                            value="PCN"
+                            checked
+                            onchange="switchMode()"
+                        />
+                        <b>Predictive Coding (PCN)</b></label
+                    >
+                    <label
+                        ><input
+                            type="radio"
+                            name="mode"
+                            value="NN"
+                            onchange="switchMode()"
+                        />
+                        <b>Neural Network (Standard)</b></label
+                    >
+                    <button
+                        onclick="resetNetwork()"
+                        style="background: #198754; margin-left: auto"
+                    >
+                        Reset Network
+                    </button>
+                </div>
+                <hr />
+                <div class="flex-row">
+                    <div class="input-group">
+                        <label><b>Input (h0):</b></label>
+                        <input
+                            type="number"
+                            id="h0_input"
+                            step="0.5"
+                            value="1.0"
+                            onchange="updateInputs()"
+                            onkeyup="updateInputs()"
+                        />
+                    </div>
+                    <div class="input-group">
+                        <label><b>Target (y):</b></label>
+                        <input
+                            type="number"
+                            id="y_input"
+                            step="0.5"
+                            value="4.0"
+                            onchange="updateInputs()"
+                            onkeyup="updateInputs()"
+                        />
+                    </div>
+                </div>
+
+                <div id="pcn_buttons" class="flex-row">
+                    <button id="btn_infer" onclick="runInferenceStep(15)">
+                        1. Inference Phase (15 steps)
+                    </button>
+                    <label class="checkbox-group"
+                        ><input type="checkbox" id="auto_infer" /> Auto
+                        Infer</label
+                    >
+
+                    <button id="btn_learn" onclick="runLearningStep(1)">
+                        2. Learning Phase (1 step)
+                    </button>
+                    <label class="checkbox-group"
+                        ><input type="checkbox" id="auto_learn" /> Auto
+                        Learn</label
+                    >
+                </div>
+
+                <div id="nn_buttons" class="flex-row" style="display: none">
+                    <button onclick="runForward()">1. Forward Pass</button>
+                    <button onclick="runBackpropStep(1)">
+                        2. Backprop Phase (1 step)
+                    </button>
+                    <label class="checkbox-group"
+                        ><input type="checkbox" id="auto_nn_learn" /> Auto
+                        Backprop</label
+                    >
+                </div>
+            </div>
+
+            <canvas id="myCanvas" width="850" height="450"></canvas>
+        </div>
+
+        <script>
+            const canvas = document.getElementById("myCanvas");
+            const ctx = canvas.getContext("2d");
+
+            let mode = "PCN";
+            let h0 = 1.0,
+                y = 4.0;
+
+            let pcn_W = [1.5, 0.8, 1.2];
+            let pcn_P = [1.5, 1.2];
+
+            let nn_W = [1.5, 0.8, 1.2];
+            let nn_h = [1.5, 1.2, 1.44];
+
+            function resetNetwork() {
+                pcn_W = [1.5, 0.8, 1.2];
+                pcn_P = [1.5, 1.2];
+                nn_W = [1.5, 0.8, 1.2];
+                nn_h = [1.5, 1.2, 1.44];
+                updateInputs();
+            }
+
+            function updateInputs() {
+                h0 = parseFloat(document.getElementById("h0_input").value) || 0;
+                y = parseFloat(document.getElementById("y_input").value) || 0;
+                if (mode === "NN") {
+                    runForward();
+                }
+                draw();
+            }
+
+            function switchMode() {
+                mode = document.querySelector(
+                    'input[name="mode"]:checked',
+                ).value;
+                document.getElementById("pcn_buttons").style.display =
+                    mode === "PCN" ? "flex" : "none";
+                document.getElementById("nn_buttons").style.display =
+                    mode === "NN" ? "flex" : "none";
+                document.getElementById("auto_infer").checked = false;
+                document.getElementById("auto_learn").checked = false;
+                document.getElementById("auto_nn_learn").checked = false;
+                draw();
+            }
+
+            function runInferenceStep(steps = 1) {
+                let lr = 0.05;
+                for (let i = 0; i < steps; i++) {
+                    let h1_hat = pcn_W[0] * h0;
+                    let h2_hat = pcn_W[1] * pcn_P[0];
+                    let h3_hat = pcn_W[2] * pcn_P[1];
+
+                    let err1 = pcn_P[0] - h1_hat;
+                    let err2 = pcn_P[1] - h2_hat;
+                    let err3 = y - h3_hat;
+
+                    let dP2 = err2 - pcn_W[2] * err3;
+                    let dP1 = err1 - pcn_W[1] * err2;
+
+                    pcn_P[1] -= lr * dP2;
+                    pcn_P[0] -= lr * dP1;
+                }
+            }
+
+            function runLearningStep(steps = 1) {
+                let lr = 0.01;
+                for (let i = 0; i < steps; i++) {
+                    let h1_hat = pcn_W[0] * h0;
+                    let h2_hat = pcn_W[1] * pcn_P[0];
+                    let h3_hat = pcn_W[2] * pcn_P[1];
+
+                    let err1 = pcn_P[0] - h1_hat;
+                    let err2 = pcn_P[1] - h2_hat;
+                    let err3 = y - h3_hat;
+
+                    pcn_W[0] += lr * err1 * h0;
+                    pcn_W[1] += lr * err2 * pcn_P[0];
+                    pcn_W[2] += lr * err3 * pcn_P[1];
+                }
+            }
+
+            function runForward() {
+                nn_h[0] = nn_W[0] * h0;
+                nn_h[1] = nn_W[1] * nn_h[0];
+                nn_h[2] = nn_W[2] * nn_h[1];
+            }
+
+            function runBackpropStep(steps = 1) {
+                let lr = 0.01;
+                for (let i = 0; i < steps; i++) {
+                    runForward();
+                    let error = y - nn_h[2];
+                    let dW2 = error * nn_h[1];
+                    let dW1 = error * nn_W[2] * nn_h[0];
+                    let dW0 = error * nn_W[2] * nn_W[1] * h0;
+
+                    nn_W[2] += lr * dW2;
+                    nn_W[1] += lr * dW1;
+                    nn_W[0] += lr * dW0;
+                }
+                runForward();
+            }
+
+            function autoLoop() {
+                if (mode === "PCN") {
+                    if (document.getElementById("auto_infer").checked)
+                        runInferenceStep(1);
+                    if (document.getElementById("auto_learn").checked)
+                        runLearningStep(1);
+                } else {
+                    if (document.getElementById("auto_nn_learn").checked)
+                        runBackpropStep(1);
+                }
+                draw();
+                requestAnimationFrame(autoLoop);
+            }
+            requestAnimationFrame(autoLoop);
+
+            function drawTextWithBackground(
+                text,
+                x,
+                y,
+                bgColor = "rgba(255,255,255,0.9)",
+            ) {
+                ctx.font = "bold 14px Arial";
+                let width = ctx.measureText(text).width;
+                ctx.fillStyle = bgColor;
+                ctx.fillRect(x - width / 2 - 2, y - 12, width + 4, 16);
+                ctx.fillStyle = "#000";
+                ctx.fillText(text, x - width / 2, y);
+            }
+
+            function drawNode(x, y_val, color, text) {
+                let cx = 100 + x * 210;
+                let cy = 350 - y_val * 35;
+
+                ctx.beginPath();
+                ctx.arc(cx, cy, 16, 0, 2 * Math.PI);
+                ctx.fillStyle = color;
+                ctx.fill();
+                ctx.strokeStyle = "#333";
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                drawTextWithBackground(text, cx, cy - 25);
+                return { cx, cy, val: y_val };
+            }
+
+            function drawArrow(p1, p2, weight_val) {
+                ctx.beginPath();
+                ctx.moveTo(p1.cx, p1.cy);
+                ctx.lineTo(p2.cx, p2.cy);
+                ctx.strokeStyle = "#444";
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                let angle = Math.atan2(p2.cy - p1.cy, p2.cx - p1.cx);
+                ctx.lineTo(
+                    p2.cx - 15 * Math.cos(angle - Math.PI / 6),
+                    p2.cy - 15 * Math.sin(angle - Math.PI / 6),
+                );
+                ctx.moveTo(p2.cx, p2.cy);
+                ctx.lineTo(
+                    p2.cx - 15 * Math.cos(angle + Math.PI / 6),
+                    p2.cy - 15 * Math.sin(angle + Math.PI / 6),
+                );
+                ctx.stroke();
+
+                let mx = (p1.cx + p2.cx) / 2;
+                let my = (p1.cy + p2.cy) / 2;
+                drawTextWithBackground("W = " + weight_val.toFixed(3), mx, my);
+            }
+
+            function drawDashedLine(p1, p2) {
+                ctx.beginPath();
+                ctx.setLineDash([6, 6]);
+                ctx.moveTo(p1.cx, p1.cy);
+                ctx.lineTo(p2.cx, p2.cy);
+                ctx.strokeStyle = "#dc3545";
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            function draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                ctx.strokeStyle = "#eee";
+                ctx.lineWidth = 1;
+                for (let i = 0; i < 8; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(50, 350 - i * 35);
+                    ctx.lineTo(800, 350 - i * 35);
+                    ctx.stroke();
+                    ctx.fillStyle = "#aaa";
+                    ctx.font = "12px Arial";
+                    ctx.fillText(i, 30, 355 - i * 35);
+                }
+
+                let pos_h0 = { cx: 100, cy: 350 - h0 * 35 };
+                let pos_y = { cx: 730, cy: 350 - y * 35 };
+
+                if (mode === "PCN") {
+                    let h1_hat = pcn_W[0] * h0;
+                    let h2_hat = pcn_W[1] * pcn_P[0];
+                    let h3_hat = pcn_W[2] * pcn_P[1];
+                    let pos_h1_hat = { cx: 310, cy: 350 - h1_hat * 35 };
+                    let pos_h2_hat = { cx: 520, cy: 350 - h2_hat * 35 };
+                    let pos_h3_hat = { cx: 730, cy: 350 - h3_hat * 35 };
+                    let pos_p1 = { cx: 310, cy: 350 - pcn_P[0] * 35 };
+                    let pos_p2 = { cx: 520, cy: 350 - pcn_P[1] * 35 };
+
+                    drawArrow(pos_h0, pos_h1_hat, pcn_W[0]);
+                    drawArrow(pos_p1, pos_h2_hat, pcn_W[1]);
+                    drawArrow(pos_p2, pos_h3_hat, pcn_W[2]);
+                    drawDashedLine(pos_p1, pos_h1_hat);
+                    drawDashedLine(pos_p2, pos_h2_hat);
+                    drawDashedLine(pos_y, pos_h3_hat);
+
+                    drawNode(0, h0, "#ddd", "h0 (Input)");
+                    drawNode(3, y, "#ddd", "y (Target)");
+                    drawNode(1, h1_hat, "#ffe066", "h1 (Prediction)");
+                    drawNode(2, h2_hat, "#ffe066", "h2 (Prediction)");
+                    drawNode(3, h3_hat, "#ffe066", "h3 (Prediction)");
+                    drawNode(1, pcn_P[0], "#4dabf7", "P1 (State)");
+                    drawNode(2, pcn_P[1], "#4dabf7", "P2 (State)");
+
+                    ctx.font = "bold 16px Arial";
+                    let text1 = `Result: Prediction (h3) = ${h3_hat.toFixed(3)} | Target (y) = ${y.toFixed(3)}`;
+                    let err = Math.abs(y - h3_hat);
+                    let text2 = `  Error: ${err.toFixed(3)}`;
+
+                    let w1 = ctx.measureText(text1).width;
+                    let w2 = ctx.measureText(text2).width;
+                    let boxWidth = w1 + w2 + 40;
+
+                    ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+                    ctx.fillRect(10, 10, boxWidth, 40);
+                    ctx.strokeStyle = "#ccc";
+                    ctx.strokeRect(10, 10, boxWidth, 40);
+
+                    ctx.fillStyle = "#000";
+                    ctx.fillText(text1, 20, 36);
+
+                    ctx.fillStyle = err < 0.05 ? "green" : "red";
+                    ctx.fillText(text2, 20 + w1, 36);
+                } else {
+                    let pos_h1 = { cx: 310, cy: 350 - nn_h[0] * 35 };
+                    let pos_h2 = { cx: 520, cy: 350 - nn_h[1] * 35 };
+                    let pos_out = { cx: 730, cy: 350 - nn_h[2] * 35 };
+
+                    drawArrow(pos_h0, pos_h1, nn_W[0]);
+                    drawArrow(pos_h1, pos_h2, nn_W[1]);
+                    drawArrow(pos_h2, pos_out, nn_W[2]);
+                    drawDashedLine(pos_y, pos_out);
+
+                    drawNode(0, h0, "#ddd", "Input");
+                    drawNode(3, y, "#ddd", "Target");
+                    drawNode(1, nn_h[0], "#8ce99a", "Hidden 1");
+                    drawNode(2, nn_h[1], "#8ce99a", "Hidden 2");
+                    drawNode(3, nn_h[2], "#8ce99a", "Output");
+
+                    ctx.font = "bold 16px Arial";
+                    let text1 = `Result: Prediction (Out) = ${nn_h[2].toFixed(3)} | Target (y) = ${y.toFixed(3)}`;
+                    let err = Math.abs(y - nn_h[2]);
+                    let text2 = `  Error: ${err.toFixed(3)}`;
+
+                    let w1 = ctx.measureText(text1).width;
+                    let w2 = ctx.measureText(text2).width;
+                    let boxWidth = w1 + w2 + 40;
+
+                    ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+                    ctx.fillRect(10, 10, boxWidth, 40);
+                    ctx.strokeStyle = "#ccc";
+                    ctx.strokeRect(10, 10, boxWidth, 40);
+
+                    ctx.fillStyle = "#000";
+                    ctx.fillText(text1, 20, 36);
+
+                    ctx.fillStyle = err < 0.05 ? "green" : "red";
+                    ctx.fillText(text2, 20 + w1, 36);
+                }
+            }
+
+            draw();
+        </script>
+    </body>
+</html>

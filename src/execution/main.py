@@ -50,6 +50,8 @@ def get_output_directories(args):
         model_subpath = 'logistic_regression'
     elif args.model == 'naive_bayes':
         model_subpath = 'nb'
+    elif args.model == 'preco':
+        model_subpath = 'preco'
 
     PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
     out_dir = PROJECT_ROOT / "outputs" / model_subpath / args.mode / args.optimizer / args.validation

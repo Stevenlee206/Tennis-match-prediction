@@ -16,6 +16,10 @@ from importlib import import_module
 import torch
 import torch.nn.functional as F
 
+from src.models.preco.pc_network_torch import PCNetworkConfig
+from src.models.preco.pc_network_torch import PredictiveCodingNetworkTorch
+from src.models.utils.metrics import binary_classification_metrics
+
 # Re-use bias metric and weight generation
 def generate_sample_weights(X_train, y_train, weight_strategy="none", upset_weight=1.0):
     if weight_strategy == "none":
@@ -26,10 +30,6 @@ def generate_sample_weights(X_train, y_train, weight_strategy="none", upset_weig
         upsets = (X_train['elo_diff'] > 0) != y_train
         weights[upsets] = upset_weight
     return weights
-
-from src.models.pc.Predictive_Coding.pc_network import PCNetworkConfig
-from src.models.pc.Predictive_Coding.pc_network_torch import PredictiveCodingNetworkTorch
-from src.models.pc.utils.metrics import binary_classification_metrics
 
 def plot_optuna_history(study, save_path):
     plt.figure(figsize=(10, 6))
@@ -214,6 +214,7 @@ def objective(trial, X_train, y_train, X_val, y_val, add_pca=False, validation="
         "inference_lr": trial.suggest_float("inference_lr", 1e-3, 1.0, log=True),
         "inference_steps": trial.suggest_int("inference_steps", 5, 50),
         "hidden_activation": trial.suggest_categorical("hidden_activation", ["tanh", "relu"]),
+        "output_activation": "sigmoid",
         "random_seed": 42
     }
     
@@ -226,8 +227,11 @@ def objective(trial, X_train, y_train, X_val, y_val, add_pca=False, validation="
     epochs = trial.suggest_categorical("epochs", [20, 50, 100])
     
     if validation == "holdout":
-        v_drop_cols = ['is_augmented'] if 'is_augmented' in X_val.columns else []
-        t_drop_cols = ['is_augmented'] if 'is_augmented' in X_train.columns else []
+        v_drop_cols = ['is_augmented', 'winner_name', 'loser_name', 'match_id'] 
+        v_drop_cols = [c for c in v_drop_cols if c in X_val.columns]
+        t_drop_cols = ['is_augmented', 'winner_name', 'loser_name', 'match_id']
+        t_drop_cols = [c for c in t_drop_cols if c in X_train.columns]
+        
         X_t_clean = X_train.drop(columns=t_drop_cols, errors='ignore')
         X_v_clean = X_val.drop(columns=v_drop_cols, errors='ignore')
 
@@ -263,8 +267,10 @@ def objective(trial, X_train, y_train, X_val, y_val, add_pca=False, validation="
                 y_v_cv = y_v_cv[X_v_cv['is_augmented'] == 0]
                 X_v_cv = X_v_cv[X_v_cv['is_augmented'] == 0]
             
-            v_drop_cols = ['is_augmented'] if 'is_augmented' in X_v_cv.columns else []
-            t_drop_cols = ['is_augmented'] if 'is_augmented' in X_t_cv.columns else []
+            v_drop_cols = ['is_augmented', 'winner_name', 'loser_name', 'match_id']
+            v_drop_cols = [c for c in v_drop_cols if c in X_v_cv.columns]
+            t_drop_cols = ['is_augmented', 'winner_name', 'loser_name', 'match_id']
+            t_drop_cols = [c for c in t_drop_cols if c in X_t_cv.columns]
             
             X_v_clean = X_v_cv.drop(columns=v_drop_cols, errors='ignore')
             X_t_clean = X_t_cv.drop(columns=t_drop_cols, errors='ignore')
@@ -296,7 +302,7 @@ def run_pc_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
     output_dir.mkdir(parents=True, exist_ok=True)
     reports_dir.mkdir(parents=True, exist_ok=True)
 
-    model_path = output_dir / "pc_model.npz"
+    model_path = output_dir / "pc_model.pt"
     scaler_path = output_dir / "pc_scaler.joblib"
     config_path = output_dir / "pc_config.json"
     log_path = output_dir / "log.txt"
@@ -349,8 +355,8 @@ def run_pc_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
     # Weights for final train
     final_weights = generate_sample_weights(X_t_eval, y_t_eval, weight_strategy, upset_weight)
 
-    # Drop flag
-    drop_c = ['is_augmented', 'match_id']
+    # 4. Prepare data for evaluation
+    drop_c = ['is_augmented', 'match_id', 'winner_name', 'loser_name']
     X_t_clean = X_t_eval.drop(columns=[c for c in drop_c if c in X_t_eval.columns])
     
     scaler = StandardScaler().fit(X_t_clean)
@@ -370,6 +376,7 @@ def run_pc_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
         inference_lr=best_params['inference_lr'],
         inference_steps=best_params['inference_steps'],
         hidden_activation=best_params['hidden_activation'],
+        output_activation="sigmoid",
         random_seed=42
     )
     
@@ -392,7 +399,7 @@ def run_pc_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
     
     # Save artifacts
     model.load_state_dict(best_state)
-    np.savez(model_path, **best_state)
+    torch.save(best_state, model_path)
     joblib.dump(scaler, scaler_path)
     
     # Save training loop log text
@@ -446,7 +453,7 @@ def run_pc_pipeline(X_train, y_train, X_val, y_val, output_dir, reports_dir,
     
     if X_v_scaled is not None:
         plot_feature_importance_permutation(model, X_v_scaled, y_v_np, X_v_clean.columns, reports_dir)
-        from src.models.pc.utils.metrics import binary_classification_metrics, evaluate_model_bias
+        from src.models.utils.metrics import binary_classification_metrics, evaluate_model_bias
         val_probs = model.predict_proba(X_v_scaled)
         val_preds = (val_probs >= 0.5).astype(int)
         final_metrics = binary_classification_metrics(y_v_np, val_probs)

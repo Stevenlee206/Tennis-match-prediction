@@ -28,6 +28,9 @@ DISPATCH_TABLE = {
     },
     'naive_bayes':{
         'grid': ('src.models.Naive_Bayes.naive_bayes_pipeline', 'run_nb_grid_pipeline')
+    },
+    'preco': {
+        'optuna': ('src.models.preco.pc_optuna', 'run_pc_pipeline')
     }
 
 }

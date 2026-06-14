@@ -1,0 +1,93 @@
+{
+    "model_type": "PredictiveCoding",
+    "optimizer": "optuna",
+    "best_params": {
+        "learning_rate": 0.07271097327524174,
+        "inference_lr": 0.004079004648749782,
+        "inference_steps": 38,
+        "hidden_activation": "relu",
+        "random_seed": 42
+    },
+    "model_params": {
+        "depth": 3,
+        "width": 32,
+        "hidden_sizes": [
+            32,
+            32,
+            32
+        ],
+        "training_params": {
+            "batch_size": 256,
+            "epochs": 100,
+            "weight_strategy": "none"
+        }
+    },
+    "evaluation": {
+        "best_epoch": 34,
+        "test_accuracy": 0.6285714507102966,
+        "training_time_seconds": 277.0950807000045
+    },
+    "features_used": [
+        "elo_diff",
+        "glicko2_diff",
+        "elo_hard_diff",
+        "glicko2_hard_diff",
+        "elo_clay_diff",
+        "rank_points_diff",
+        "glicko2_clay_diff",
+        "elo_grass_diff",
+        "glicko2_grass_diff",
+        "hand_win_pct_diff",
+        "rank_diff",
+        "first_won_diff",
+        "second_won_diff",
+        "form_diff",
+        "fatigue_diff",
+        "h2h_advantage_diff",
+        "clutch_diff",
+        "ace_vs_df_diff",
+        "height_diff",
+        "first_in_diff",
+        "age_diff",
+        "round_R16",
+        "surface_Clay",
+        "day_cos",
+        "surface_Hard",
+        "day_of_year",
+        "month",
+        "month_sin",
+        "month_cos",
+        "tourney_level_A",
+        "day_sin",
+        "round_R32",
+        "same_hand_flag",
+        "best_of",
+        "tourney_level_G",
+        "tourney_level_M",
+        "round_R64",
+        "round_R128",
+        "surface_Grass",
+        "round_QF",
+        "round_RR",
+        "round_SF",
+        "tourney_level_D",
+        "round_F",
+        "tourney_level_F",
+        "surface_Carpet",
+        "round_BR"
+    ],
+    "bias_metrics": {
+        "final_accuracy": 61.59,
+        "precision": 64.52,
+        "recall": 50.45,
+        "f1_score": 56.62,
+        "matthews_corr_coef": 0.2364,
+        "roc_auc": 61.48,
+        "brier_score": 0.3354,
+        "class_1_prediction_rate": 38.85,
+        "elo_reliance": 80.38,
+        "elo_baseline_accuracy": 64.06,
+        "upset_prediction_accuracy": 23.85,
+        "rank_reliance": 76.34
+    }
+}
