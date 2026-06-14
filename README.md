@@ -19,6 +19,8 @@ This repository is centered on `src/execution/main.py`. It loads prepared tennis
     - `get_pipeline_runner.py`: maps model names and optimizer modes to pipeline functions.
     - `load_and_evaluate.py`: loads trained artifacts and evaluates final performance.
     - `model_registry.py`: contains the model-to-module routing table.
+    - `pros_PC_main.py`: orchestrates the continual learning benchmark comparing Neural Network (NN) vs Predictive Coding (PCN) across multiple modes.
+    - `pc-vs-dl_simulator/`: interactive browser-based web visualization comparing state inference and weight learning between PCN and Backpropagation (BP).
   - `models/`: model implementations and optimization pipelines.
     - `svm/`: SVM implementations for PyTorch and scikit-learn, including Optuna and SGD variants.
     - `rf/`: random forest pipelines and tuning code.
@@ -26,7 +28,7 @@ This repository is centered on `src/execution/main.py`. It loads prepared tennis
     - `decisiontree/`: decision tree pipelines and search strategies.
     - `logistic_reg/`: logistic regression pipeline.
     - `Naive_Bayes/`: Naive Bayes pipeline.
-    - `pc/`: predictive coding code and PC-specific pipelines.
+    - `preco/`: predictive coding network implementations (PRECO package) and PC-specific tuning.
   - `preprocessing/`: data cleaning, encoding, feature engineering, and rating utilities.
     - `load_data_func/`: raw data loading helpers.
     - `feature_engineering_func/`: feature construction logic.
@@ -87,17 +89,33 @@ python -m src.models.mlp_pytorch.train_dl
 
 This script performs k-fold-like training, selects the best learning rate and weight decay, and finally evaluates on a quarantine test set.
 
-### Predictive Coding
+### Predictive Coding & Continual Learning
 
-Predictive Coding training is implemented in `src/models/pc/Predictive_Coding/main.py`.
+Predictive Coding (PCN) model implementation is located in `src/models/preco/` (using the `PRECO` package structure), with the PyTorch-based wrapper `PredictiveCodingNetworkTorch`.
 
-Run it from the repository root:
-
+#### Run via main pipeline:
+You can run the predictive coding model through the primary entry point:
 ```powershell
-python -m src.models.pc.Predictive_Coding.main
+python -m src.execution.main --model preco --optimizer optuna --validation holdout [options]
 ```
 
-This script configures and trains a PC model with a predefined dataset split, then prints final train/test metrics.
+#### Run the Continual Learning Benchmark:
+The script `src/execution/pros_PC_main.py` runs a benchmark comparing Neural Network (NN) and Predictive Coding (PCN) under continual learning conditions (Static, Fine-tune, Retrain, Online pre-quential, and Ultimate Streaming modes):
+```powershell
+python src/execution/pros_PC_main.py [options]
+```
+**Options:**
+- `--run_all`: Run all benchmark modes.
+- `--run_static`: Run Static mode only.
+- `--run_finetune`: Run Finetune mode only.
+- `--run_retrain`: Run Retrain mode only.
+- `--run_online`: Run Online streaming modes.
+- `--weight_strategy <none|static>`: Sample weighting strategy.
+- `--bootstrap_resamples <int>`: Number of bootstrap resamples for metric confidence intervals.
+
+#### Visual Web Simulator:
+An interactive simulator comparing state inference and weight learning between Backpropagation (BP/NN) and PCN is located at `src/execution/pc-vs-dl_simulator/index.html`.
+You can open this file in any modern web browser to run and visualize the simulation.
 
 ## CLI argument reference
 
@@ -124,7 +142,7 @@ All CLI arguments are defined in `src/execution/parse_args.py`.
 
 - `--model <string>`
   - Selects the model pipeline.
-  - Options: `svm`, `rf`, `pytorch_svm`, `tabnet`, `deepforest`, `xgboost`, `decisiontree`, `adaboost`, `logistic_regression`, `naive_bayes`
+  - Options: `svm`, `rf`, `pytorch_svm`, `tabnet`, `deepforest`, `xgboost`, `decisiontree`, `adaboost`, `logistic_regression`, `naive_bayes`, `preco`
   - Default: `svm`
 - `--add_kmeans`
   - Enable KMeans-based feature augmentation.
