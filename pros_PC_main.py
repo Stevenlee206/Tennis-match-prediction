@@ -24,12 +24,6 @@ from src.continual_learning_benchmark.models_setup import (
 )
 from src.continual_learning_benchmark.feature_importance import calculate_permutation_importance, plot_feature_importance
 from src.continual_learning_benchmark.utils import TeeLogger
-from src.continual_learning_benchmark.adaptation_metrics import (
-    generate_metric_plots,
-    generate_metric_tables,
-    print_adaptation_interpretation,
-)
-from src.continual_learning_benchmark.player_elo_adaptation import generate_player_elo_tables
 from src.models.utils.metrics import binary_classification_metrics
 
 ###
@@ -555,23 +549,6 @@ def run_benchmark():
         
     print(f"\nGenerating Final Visualizations...")
     plot_final_metrics_bar(all_results, run_dir)
-    if prediction_records:
-        adaptation_dir = os.path.join(run_dir, "adaptation_metrics")
-        prediction_df = pd.concat(prediction_records, ignore_index=True)
-        print(f"Generating adaptation-oriented tables and plots in: {adaptation_dir}")
-        adaptation_tables = generate_metric_tables(
-            prediction_df,
-            adaptation_dir,
-            bootstrap_resamples=args.bootstrap_resamples,
-        )
-        generate_metric_plots(adaptation_tables, adaptation_dir)
-        print_adaptation_table_preview(adaptation_tables)
-        print_adaptation_interpretation(adaptation_tables)
-        player_elo_dir = os.path.join(adaptation_dir, "player_elo_adaptation")
-        print(f"Generating player-centric Elo adaptation metrics in: {player_elo_dir}")
-        player_elo_tables = generate_player_elo_tables(prediction_df, player_elo_dir)
-        print_player_elo_table_preview(player_elo_tables)
-    print(f"All outputs saved to: {run_dir}")
     
     if isinstance(sys.stdout, TeeLogger):
         sys.stdout.close()

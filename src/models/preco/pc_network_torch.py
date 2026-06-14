@@ -3,12 +3,14 @@ from __future__ import annotations
 from typing import List, Sequence, Tuple
 import numpy as np
 import torch
+from dataclasses import dataclass
 
-from src.models.predictive_coding.pc_network import PCNetworkConfig
 import src.models.preco.utils as preco_utils
 import src.models.preco.optim as preco_optim
 from src.models.preco.PCN import PCnet
 from src.models.preco.structure import PCN_MBA
+
+
 
 # Mapping string names to PRECO activation functions
 act_map = {
@@ -20,6 +22,15 @@ act_map = {
     "linear": preco_utils.linear,
     "leaky_relu": preco_utils.leaky_relu,
 }
+
+@dataclass
+class PCNetworkConfig:
+	hidden_activation: str = "tanh"
+	output_activation: str = "sigmoid"
+	learning_rate: float = 1e-2
+	inference_lr: float = 2e-1
+	inference_steps: int = 20
+	random_seed: int = 42
 
 class PredictiveCodingNetworkTorch:
     """Predictive Coding network implemented using the PRECO library.

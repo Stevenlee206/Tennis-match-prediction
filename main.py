@@ -634,8 +634,8 @@ def main():
                     y_pred_val = (preds_raw > 0).cpu().numpy().astype(int)
             elif args.model == "predictive_coding":
                 import torch
-                from src.models.predictive_coding.pc_network_torch import PredictiveCodingNetworkTorch
-                from src.models.predictive_coding.pc_network import PCNetworkConfig
+                from src.models.preco.pc_network_torch import PredictiveCodingNetworkTorch
+                from src.models.preco.pc_network_torch import PCNetworkConfig
                 with open(config_path, 'r') as f:
                     cfg = json.load(f)
                 
