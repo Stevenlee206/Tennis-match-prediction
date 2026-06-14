@@ -16,8 +16,8 @@ from importlib import import_module
 import torch
 import torch.nn.functional as F
 
-from src.models.predictive_coding.pc_network import PCNetworkConfig
-from src.models.predictive_coding.pc_network_torch import PredictiveCodingNetworkTorch
+from src.models.preco.pc_network_torch import PCNetworkConfig
+from src.models.preco.pc_network_torch import PredictiveCodingNetworkTorch
 from src.models.utils.metrics import binary_classification_metrics
 
 # Re-use bias metric and weight generation
